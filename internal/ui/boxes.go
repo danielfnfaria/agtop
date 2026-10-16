@@ -48,6 +48,12 @@ func busy(s *store.SessionView) bool {
 	return !stale(s) && style.Activity(s.Activity) == style.ActivityBusy
 }
 
+// pending is a live background session whose transcript does not exist yet: it was launched in
+// the background but has not started writing.
+func pending(s *store.SessionView) bool {
+	return !stale(s) && s.Kind == "background" && !s.HasTranscript
+}
+
 func (p painter) spinner() string {
 	frames := p.g.Spinner
 	if len(frames) == 0 {
@@ -140,7 +146,11 @@ func (p painter) border(c *canvas, x, y, w, h int, b style.Box, st sty) {
 func (p painter) sessionBox(c *canvas, x, y int, s *store.SessionView, selected, showProfile bool, tone style.Color) {
 	g, t := p.g, p.t
 	isStale := stale(s)
+	isPending := pending(s)
 	color := style.SessionBorderColor(style.Activity(s.Activity), string(s.Liveness), t)
+	if isPending {
+		color = t.Pending
+	}
 	edge, box := g.TopRound, g.BorderRound
 	if selected {
 		edge, box = g.TopBold, g.BorderBold
@@ -234,6 +244,9 @@ func (p painter) sessionBox(c *canvas, x, y int, s *store.SessionView, selected,
 	if isStale {
 		c.line(cx, row, sessionContent, g.Ellipsis,
 			fg(g.Dot+" "+p.ago(s.StaleSince, "ended ", " ago", "ended"), t.Muted))
+	} else if isPending {
+		c.line(cx, row, sessionContent, g.Ellipsis,
+			fg(g.Dot, t.Pending), plain(" bg "+g.Middot+" not started"))
 	} else {
 		c.line(cx, row, sessionContent, g.Ellipsis,
 			fg(g.Dot, style.ActivityColor(style.Activity(s.Activity), t)),

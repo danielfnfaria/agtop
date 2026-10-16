@@ -97,6 +97,8 @@ type SessionView struct {
 	// RawStatus is the registry status as given, only with ActivityUnknown.
 	RawStatus string
 	Liveness  Liveness
+	// HasTranscript reports whether a transcript file was located for the session.
+	HasTranscript bool
 	// StaleSince is the epoch ms when the session stopped being alive.
 	StaleSince int64
 	// StartedAt is the startedAt of sessions/<pid>.json (epoch ms).

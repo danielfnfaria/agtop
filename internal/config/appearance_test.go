@@ -107,6 +107,13 @@ sparkline = false
 		}
 	})
 
+	t.Run("accepts the pending role", func(t *testing.T) {
+		out := parseAppearanceText(t, "[theme]\npending = \"magenta\"")
+		if !reflect.DeepEqual(out.Theme.Colors, map[string]string{"pending": "magenta"}) {
+			t.Errorf("got %v", out.Theme.Colors)
+		}
+	})
+
 	t.Run("accepts a plain unicode glyph", func(t *testing.T) {
 		out := parseAppearanceText(t, "[glyphs]\ndot = \"\\u25cf\"")
 		if !reflect.DeepEqual(out.Glyphs.Slots, map[string]string{"dot": "\u25cf"}) {

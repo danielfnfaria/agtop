@@ -49,6 +49,18 @@ func manyStore() Options {
 	return testOptions(newFakeStore(snapshot(sessions, profiles)), profiles)
 }
 
+func pendingStore() Options {
+	sessions := []*store.SessionView{
+		session("claude:p1", func(s *store.SessionView) {
+			s.DisplayTitle, s.Kind = "Bg task", "background"
+		}),
+		session("claude:p2", func(s *store.SessionView) {
+			s.DisplayTitle = "Idle task"
+		}),
+	}
+	return testOptions(newFakeStore(snapshot(sessions, profiles)), profiles)
+}
+
 func withAppearance(o Options, c *style.AppearanceConfig) Options {
 	o.Appearance = style.ResolveAppearance(c)
 	return o
@@ -90,6 +102,7 @@ func scenarios() []scenario {
 		{name: "scroll-80x24", opts: manyStore, w: 80, h: 24, keys: []string{"down", "down", "down"}},
 		{name: "agents-tree-100x30", opts: detailStore, w: 100, h: 30},
 		{name: "agents-tree-40x30", opts: detailStore, w: 40, h: 30},
+		{name: "pending-100x30", opts: pendingStore, w: 100, h: 30},
 		{name: "color-tree-100x30", opts: func() Options {
 			o := fiveStore()
 			o.Style = StyleFull

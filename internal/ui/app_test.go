@@ -447,3 +447,35 @@ func TestActivityUnknownShowsRawStatus(t *testing.T) {
 	a := newApp(testOptions(newFakeStore(snapshot([]*store.SessionView{s}, profiles)), profiles), 100, 30)
 	mustContain(t, screen(a), "● compacting · 5s ago")
 }
+
+func TestPendingBackgroundSessionShowsNotStarted(t *testing.T) {
+	s := session("claude:bg", func(s *store.SessionView) {
+		s.Kind = "background"
+	})
+	a := newApp(testOptions(newFakeStore(snapshot([]*store.SessionView{s}, profiles)), profiles), 100, 30)
+	f := screen(a)
+	mustContain(t, f, "● bg · not started")
+	mustNotContain(t, f, "ended")
+}
+
+func TestPendingPredicate(t *testing.T) {
+	cases := []struct {
+		name string
+		f    func(*store.SessionView)
+		want bool
+	}{
+		{"background without transcript", func(s *store.SessionView) { s.Kind = "background" }, true},
+		{"interactive without transcript", func(s *store.SessionView) { s.Kind = "interactive" }, false},
+		{"sdk-cli without transcript", func(s *store.SessionView) { s.Kind = "sdk-cli" }, false},
+		{"empty kind", func(s *store.SessionView) {}, false},
+		{"with transcript", func(s *store.SessionView) { s.Kind, s.HasTranscript = "background", true }, false},
+		{"stale background", func(s *store.SessionView) { s.Kind, s.Liveness = "background", store.Stale }, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := pending(session("x", c.f)); got != c.want {
+				t.Errorf("pending() = %v, want %v", got, c.want)
+			}
+		})
+	}
+}

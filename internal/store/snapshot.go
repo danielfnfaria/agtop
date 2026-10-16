@@ -178,6 +178,7 @@ func (p projector) project(e *sessionEntry) *SessionView {
 		Activity:       d.Activity,
 		RawStatus:      d.RawStatus,
 		Liveness:       e.liveness,
+		HasTranscript:  d.Files.TranscriptPath != "",
 		StaleSince:     e.staleSince,
 		StartedAt:      d.StartedAt,
 		DisplayTitle:   displayTitle(e, s),

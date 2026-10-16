@@ -27,8 +27,8 @@ look). Colors are chalk names (black, red, green, yellow, blue, magenta, cyan,
 white, gray and the *Bright forms, e.g. cyanBright) or #rgb / #rrggbb:
   [theme]
   preset = "dark"                  dark | light
-  busy = "yellow"                  per role: muted accent busy shell waiting
-  waiting = "#ff5f5f"              idle done failed ok warn critical link
+  busy = "yellow"                  per role: muted accent busy shell waiting idle
+  waiting = "#ff5f5f"              pending done failed ok warn critical link
   profiles = ["magenta", "blue"]   palette of the profiles (cycles)
   [glyphs]
   preset = "ascii"                 unicode | ascii (+-| borders, # . bars)

@@ -196,6 +196,17 @@ func TestProjector(t *testing.T) {
 		}
 	})
 
+	t.Run("exposes transcript existence", func(t *testing.T) {
+		p := projector{newContextLearner(nil)}
+		with := testEntry("s", 0, profile1, func(d *discovery.DiscoveredSession) { d.Files.TranscriptPath = "/x.jsonl" })
+		if v := p.project(with); !v.HasTranscript {
+			t.Error("transcript located but not reported")
+		}
+		if v := p.project(testEntry("s-none", 0, profile1, nil)); v.HasTranscript {
+			t.Error("no transcript but reported present")
+		}
+	})
+
 	t.Run("display title fallbacks", func(t *testing.T) {
 		p := projector{newContextLearner(nil)}
 		withCwd := func(name string) func(*discovery.DiscoveredSession) {

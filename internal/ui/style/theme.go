@@ -4,8 +4,8 @@ import "github.com/danielfnfaria/agtop/internal/domain"
 
 // ThemeRoles are the roles the UI paints with, in documentation order.
 var ThemeRoles = []string{
-	"muted", "accent", "busy", "shell", "waiting", "idle", "done", "failed", "ok", "warn",
-	"critical", "link",
+	"muted", "accent", "busy", "shell", "waiting", "idle", "pending", "done", "failed", "ok",
+	"warn", "critical", "link",
 }
 
 // ThemePresets are the preset names, the first being the default.
@@ -14,8 +14,8 @@ var ThemePresets = []string{"dark", "light"}
 // Theme holds a color per role. Profiles is the palette of the profiles, by position (cycling
 // after the last one).
 type Theme struct {
-	Muted, Accent, Busy, Shell, Waiting, Idle, Done, Failed, OK, Warn, Critical, Link Color
-	Profiles                                                                          []Color
+	Muted, Accent, Busy, Shell, Waiting, Idle, Pending, Done, Failed, OK, Warn, Critical, Link Color
+	Profiles                                                                                   []Color
 }
 
 // Role returns a pointer to the color of the named role (one of ThemeRoles), or nil.
@@ -33,6 +33,8 @@ func (t *Theme) Role(name string) *Color {
 		return &t.Waiting
 	case "idle":
 		return &t.Idle
+	case "pending":
+		return &t.Pending
 	case "done":
 		return &t.Done
 	case "failed":
@@ -52,15 +54,16 @@ func (t *Theme) Role(name string) *Color {
 // DarkTheme is for a dark terminal background.
 var DarkTheme = Theme{
 	Muted: "gray", Accent: "cyan", Busy: "yellow", Shell: "cyan", Waiting: "red", Idle: "green",
-	Done: "green", Failed: "red", OK: "green", Warn: "yellow", Critical: "red", Link: "blue",
+	Pending: "#8a8a8a", Done: "green", Failed: "red", OK: "green", Warn: "yellow", Critical: "red",
+	Link:     "blue",
 	Profiles: []Color{"magenta", "blue", "cyanBright", "magentaBright", "blueBright", "whiteBright"},
 }
 
 // LightTheme is for a light terminal background: darker hues (yellow and cyan vanish on white).
 var LightTheme = Theme{
 	Muted: "#6c6c6c", Accent: "#005f87", Busy: "#af5f00", Shell: "#008787", Waiting: "#d70000",
-	Idle: "#008700", Done: "#008700", Failed: "#d70000", OK: "#008700", Warn: "#af5f00",
-	Critical: "#d70000", Link: "#0000d7",
+	Idle: "#008700", Pending: "#9e9e9e", Done: "#008700", Failed: "#d70000", OK: "#008700",
+	Warn: "#af5f00", Critical: "#d70000", Link: "#0000d7",
 	Profiles: []Color{"#af00af", "#0000d7", "#005f87", "#870087", "#5f5fd7", "#000000"},
 }
 
