@@ -3,6 +3,7 @@
   "packages": {
     ".": {
       "release-type": "go",
+      "initial-version": "0.1.0",
       "package-name": "agtop",
       "changelog-path": "CHANGELOG.md",
       "bump-minor-pre-major": true,
