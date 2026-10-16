@@ -166,6 +166,14 @@ func (p painter) drawDetail(c *canvas, y int, in detailInput) int {
 	return y
 }
 
+// pidText is the pid, or dash when the session has none (0).
+func pidText(pid int, dash string) string {
+	if pid == 0 {
+		return dash
+	}
+	return strconv.Itoa(pid)
+}
+
 func plural(n int, one, many string) string {
 	if n == 1 {
 		return one
@@ -250,7 +258,7 @@ func (p painter) detailHeader(c *canvas, y int, s *store.SessionView, profile *c
 		label("branch"), plain(clip(orDash(s.GitBranch))), sep,
 		label("model"), plain(clip(modelText)), sep,
 		label("version"), plain(clip(orDash(s.Version))), sep,
-		label("pid"), plain(strconv.Itoa(s.PID)))
+		label("pid"), plain(pidText(s.PID, g.Dash)))
 	y++
 
 	provider := domain.ProviderInfo(s.Provider)

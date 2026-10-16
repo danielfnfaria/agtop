@@ -14,9 +14,9 @@ import (
 	"github.com/danielfnfaria/agtop/internal/config"
 	"github.com/danielfnfaria/agtop/internal/discovery"
 	"github.com/danielfnfaria/agtop/internal/domain"
-	"github.com/danielfnfaria/agtop/internal/ingest/tailer"
 	"github.com/danielfnfaria/agtop/internal/ingest/watcher"
 	"github.com/danielfnfaria/agtop/internal/source"
+	"github.com/danielfnfaria/agtop/internal/source/claudecode"
 )
 
 const (
@@ -143,10 +143,7 @@ type Snapshot struct {
 }
 
 // Tailer reads the lines appended to a file (see tailer.Tailer).
-type Tailer interface {
-	Read() (tailer.Result, error)
-	Close() error
-}
+type Tailer = claudecode.Tailer
 
 // Clock is the time source of the store: Now is epoch ms; AfterFunc runs f (on any goroutine)
 // after ms and returns a function that cancels it.
@@ -158,8 +155,8 @@ type Clock interface {
 // Deps are the injectable collaborators of the store.
 type Deps struct {
 	Discovery discovery.Deps
-	// Source defaults to Claude Code over Discovery.
-	Source     source.Source
+	// Sources are the providers the store reads; default: Claude Code over Discovery and NewTailer.
+	Sources    []source.Source
 	NewTailer  func(path string) (Tailer, error)
 	NewWatcher watcher.Factory
 	Clock      Clock

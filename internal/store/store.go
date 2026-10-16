@@ -7,7 +7,9 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/danielfnfaria/agtop/internal/config"
 	"github.com/danielfnfaria/agtop/internal/discovery"
+	"github.com/danielfnfaria/agtop/internal/domain"
 	"github.com/danielfnfaria/agtop/internal/ingest/tailer"
 	"github.com/danielfnfaria/agtop/internal/ingest/watcher"
 	"github.com/danielfnfaria/agtop/internal/source"
@@ -27,9 +29,9 @@ func DefaultDeps() Deps {
 // Store keeps the live sessions of the profiles up to date. Its methods are safe for
 // concurrent use.
 type Store struct {
-	opts   Options
-	deps   Deps
-	source source.Source
+	opts    Options
+	deps    Deps
+	sources []source.Source
 
 	inbox   chan func()
 	stopCh  chan struct{}
@@ -90,14 +92,14 @@ func New(opts Options, deps Deps) *Store {
 	if d.Log == nil {
 		d.Log = io.Discard
 	}
-	d.Source = deps.Source
-	if d.Source == nil {
-		d.Source = claudecode.New(d.Discovery)
+	d.Sources = deps.Sources
+	if len(d.Sources) == 0 {
+		d.Sources = []source.Source{claudecode.New(d.Discovery, d.NewTailer)}
 	}
 	s := &Store{
 		opts:           opts,
 		deps:           d,
-		source:         d.Source,
+		sources:        d.Sources,
 		inbox:          make(chan func(), 1024),
 		stopCh:         make(chan struct{}),
 		done:           make(chan struct{}),
@@ -112,6 +114,25 @@ func New(opts Options, deps Deps) *Store {
 	s.usage = newUsageTracker(s)
 	s.learner = newContextLearner(s.usage.reportedWindows)
 	return s
+}
+
+// sourceOf is the source of provider; nil when the store has none for it. Sessions only come from
+// discover(), which groups the profiles by existing sources, so it is never nil for an entry.
+func (s *Store) sourceOf(provider domain.ProviderID) source.Source {
+	for _, src := range s.sources {
+		if src.Provider() == provider {
+			return src
+		}
+	}
+	return nil
+}
+
+// profileProvider is the provider of a profile (Claude Code when it does not say).
+func profileProvider(p config.ProfileDir) domain.ProviderID {
+	if p.Provider == "" {
+		return domain.ClaudeCode
+	}
+	return p.Provider
 }
 
 // Snapshot is the last emitted snapshot (the same pointer until the next emission).
@@ -375,7 +396,6 @@ func (s *Store) emit() {
 	now := s.deps.Clock.Now()
 	s.snap.Store(buildSnapshot(snapshotInput{
 		profiles: s.opts.Profiles,
-		provider: s.source.Provider(),
 		entries:  entries,
 		last:     s.lastDiscovery,
 		errors:   s.errors,

@@ -3,6 +3,8 @@ package store
 import (
 	"reflect"
 
+	"github.com/danielfnfaria/agtop/internal/config"
+	"github.com/danielfnfaria/agtop/internal/discovery"
 	"github.com/danielfnfaria/agtop/internal/domain"
 )
 
@@ -19,13 +21,41 @@ func (s *Store) removeSession(e *sessionEntry) {
 	}
 	s.setSubagentsDir(e, "")
 	s.closeSessionWatcher(e)
-	s.source.ForgetSession(e.profile, e.sessionID)
+	if src := s.sourceOf(e.provider); src != nil {
+		src.ForgetSession(e.profile, e.sessionID)
+	}
 	s.closeTailers(e)
 	s.changed()
 }
 
+// discover scans the profiles of each source with it, in the order of the sources, and joins the
+// results. Profiles whose provider has no source are not scanned.
+func (s *Store) discover() (discovery.Result, error) {
+	var out discovery.Result
+	for i, src := range s.sources {
+		var group []config.ProfileDir
+		for _, p := range s.opts.Profiles {
+			if profileProvider(p) == src.Provider() {
+				group = append(group, p)
+			}
+		}
+		if len(group) == 0 {
+			continue
+		}
+		res, err := src.Discover(group)
+		if err != nil {
+			return discovery.Result{}, err
+		}
+		if i == 0 || out.ScannedAt == 0 {
+			out.ScannedAt = res.ScannedAt
+		}
+		out.Profiles = append(out.Profiles, res.Profiles...)
+	}
+	return out, nil
+}
+
 func (s *Store) scanOnce() {
-	result, err := s.source.Discover(s.opts.Profiles)
+	result, err := s.discover()
 	if err != nil {
 		s.pushError("discovery: " + errorCode(err))
 		return
@@ -42,7 +72,7 @@ func (s *Store) scanOnce() {
 	// scannedAt alone changing does not justify a new snapshot. The usage view takes part: it
 	// turns stale with time alone, and the next scan shows it.
 	dirty := false
-	statuses := profileStatuses(s.opts.Profiles, s.source.Provider(), s.lastDiscovery, s.usage.views(now))
+	statuses := profileStatuses(s.opts.Profiles, s.lastDiscovery, s.usage.views(now))
 	if s.profilesSig == nil || !reflect.DeepEqual(statuses, s.profilesSig) {
 		s.profilesSig = statuses
 		dirty = true
@@ -55,7 +85,7 @@ func (s *Store) scanOnce() {
 			live[d.Key] = true
 			e := s.sessions[d.Key]
 			if e == nil {
-				e = newEntry(d, now, s.source.Provider())
+				e = newEntry(d, now, profileProvider(d.Profile))
 				s.sessions[d.Key] = e
 				// The session may be coming back (e.g. --resume): retired only goes at the end of
 				// its first rebuild, when the transcript read again already has that activity.

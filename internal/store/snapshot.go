@@ -52,8 +52,8 @@ func compareEntries(a, b *sessionEntry) int {
 }
 
 // profileStatuses is the status of each profile (in profiles order) from the last discovery,
-// with its usage; every profile belongs to provider.
-func profileStatuses(profiles []config.ProfileDir, provider domain.ProviderID, last *discovery.Result,
+// with its usage; each one reports the provider of its profile.
+func profileStatuses(profiles []config.ProfileDir, last *discovery.Result,
 	usage map[string]domain.UsageView) []ProfileStatus {
 	out := make([]ProfileStatus, 0, len(profiles))
 	for _, profile := range profiles {
@@ -68,7 +68,7 @@ func profileStatuses(profiles []config.ProfileDir, provider domain.ProviderID, l
 		}
 		st := ProfileStatus{
 			Label:    profile.Label,
-			Provider: provider,
+			Provider: profileProvider(profile),
 			Dir:      profile.Dir,
 			Source:   profile.Source,
 			Issues:   map[discovery.IssueReason]int{},
@@ -233,7 +233,6 @@ func displayTitle(e *sessionEntry, s domain.SessionState) string {
 
 type snapshotInput struct {
 	profiles []config.ProfileDir
-	provider domain.ProviderID
 	entries  []*sessionEntry
 	last     *discovery.Result
 	errors   []string
@@ -261,7 +260,7 @@ func buildSnapshot(in snapshotInput) *Snapshot {
 	}
 	return &Snapshot{
 		Sessions:          views,
-		Profiles:          profileStatuses(in.profiles, in.provider, in.last, in.usage),
+		Profiles:          profileStatuses(in.profiles, in.last, in.usage),
 		ScannedAt:         scannedAt,
 		Errors:            append([]string{}, in.errors...),
 		ActivityByProfile: activityByProfile(in.profiles, entries, in.retired, in.now),

@@ -67,14 +67,15 @@ func (s *Store) syncSessionWatcher(e *sessionEntry) {
 	}
 	s.closeSessionWatcher(e)
 	e.watchKey, e.watchSet = key, true
-	if e.transcriptPath == "" && e.subagentsDir == "" {
+	src := s.sourceOf(e.provider)
+	if src == nil {
 		return
 	}
-	w, err := s.deps.NewWatcher(watcher.Target{
-		Kind:           watcher.KindSession,
-		TranscriptPath: e.transcriptPath,
-		SubagentsDir:   e.subagentsDir,
-	})
+	target, ok := src.SessionWatch(e.transcriptPath, e.subagentsDir)
+	if !ok {
+		return
+	}
+	w, err := s.deps.NewWatcher(target)
 	if err != nil {
 		// Not retried until the paths change; the scan keeps covering the session.
 		s.pushError("watcher session " + e.key + ": " + errorCode(err))
@@ -128,23 +129,27 @@ func (s *Store) onFileEvent(owner *sessionEntry, ev watcher.Event) {
 // openWatchers opens one watcher per profile over the source registry root.
 func (s *Store) openWatchers() {
 	for _, profile := range s.opts.Profiles {
-		root, ok := s.source.RegistryRoot(profile)
+		src := s.sourceOf(profileProvider(profile))
+		if src == nil {
+			continue
+		}
+		target, ok := src.RegistryWatch(profile)
 		if s.isStopped() {
 			return
 		}
 		if !ok {
 			continue
 		}
-		w, err := s.deps.NewWatcher(watcher.Target{Kind: watcher.KindSessions, Root: root})
+		w, err := s.deps.NewWatcher(target)
 		if err != nil {
-			s.pushError("watcher " + root + ": " + errorCode(err))
+			s.pushError("watcher " + target.Root + ": " + errorCode(err))
 			continue
 		}
 		if !s.track(w) {
 			return
 		}
 		s.globals = append(s.globals, w)
-		s.forward(w, func(watcher.Event) { s.requestScan() }, "watcher "+root)
+		s.forward(w, func(watcher.Event) { s.requestScan() }, "watcher "+target.Root)
 	}
 }
 

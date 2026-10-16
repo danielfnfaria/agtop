@@ -4,12 +4,27 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/danielfnfaria/agtop/internal/config"
 	"github.com/danielfnfaria/agtop/internal/discovery"
 	"github.com/danielfnfaria/agtop/internal/domain"
+	"github.com/danielfnfaria/agtop/internal/ingest/tailer"
+	"github.com/danielfnfaria/agtop/internal/ingest/watcher"
 )
+
+func appendFile(t *testing.T, p, content string) {
+	t.Helper()
+	f, err := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if _, err := f.WriteString(content); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func writeFile(t *testing.T, p, content string) {
 	t.Helper()
@@ -36,12 +51,12 @@ func setup(t *testing.T) (discovery.Deps, config.ProfileDir) {
 
 func TestSourceDiscoversAndListsAgents(t *testing.T) {
 	deps, profile := setup(t)
-	src := New(deps)
+	src := New(deps, func(p string) (Tailer, error) { return tailer.New(p) })
 	if src.Provider() != domain.ClaudeCode {
 		t.Errorf("provider = %q", src.Provider())
 	}
-	if _, ok := src.RegistryRoot(profile); ok {
-		t.Error("RegistryRoot must be absent before sessions/ exists")
+	if _, ok := src.RegistryWatch(profile); ok {
+		t.Error("RegistryWatch must be absent before sessions/ exists")
 	}
 
 	writeFile(t, filepath.Join(profile.Dir, "sessions", "100.json"),
@@ -51,8 +66,9 @@ func TestSourceDiscoversAndListsAgents(t *testing.T) {
 	writeFile(t, filepath.Join(proj, "live-1", "subagents", "agent-q1.jsonl"), "{}\n")
 	writeFile(t, filepath.Join(proj, "live-1", "subagents", "agent-q1.meta.json"), `{"agentType":"x"}`)
 
-	if root, ok := src.RegistryRoot(profile); !ok || root != filepath.Join(profile.Dir, "sessions") {
-		t.Errorf("RegistryRoot = %q, %v", root, ok)
+	wantRegistry := watcher.Target{Kind: watcher.KindSessions, Root: filepath.Join(profile.Dir, "sessions")}
+	if target, ok := src.RegistryWatch(profile); !ok || target != wantRegistry {
+		t.Errorf("RegistryWatch = %+v, %v", target, ok)
 	}
 	res, err := src.Discover([]config.ProfileDir{profile})
 	if err != nil {
@@ -73,14 +89,30 @@ func TestSourceDiscoversAndListsAgents(t *testing.T) {
 	if sig, ok := src.FileSignature(agents[0].TranscriptPath); !ok || sig == "" {
 		t.Errorf("signature = %q, %v", sig, ok)
 	}
-	if got := src.ParseLine("not json"); len(got) != 1 || got[0].EventKind() != "parse_error" {
-		t.Errorf("ParseLine = %+v", got)
+	wantSession := watcher.Target{Kind: watcher.KindSession, TranscriptPath: "/t.jsonl", SubagentsDir: "/t/subagents"}
+	if target, ok := src.SessionWatch("/t.jsonl", "/t/subagents"); !ok || target != wantSession {
+		t.Errorf("SessionWatch = %+v, %v", target, ok)
+	}
+	if _, ok := src.SessionWatch("", ""); ok {
+		t.Error("SessionWatch must be absent without paths")
+	}
+	reader, err := src.OpenTranscript(live[0].Files.TranscriptPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	if got, err := reader.Read(); err != nil || got.Reset || len(got.Events) != 1 {
+		t.Errorf("first Read = %+v, %v", got, err)
+	}
+	appendFile(t, live[0].Files.TranscriptPath, "not json\n")
+	if got, err := reader.Read(); err != nil || len(got.Events) != 1 || got.Events[0].EventKind() != "parse_error" {
+		t.Errorf("Read = %+v, %v", got, err)
 	}
 }
 
 func TestForgetSessionDropsOnlyFoundLocations(t *testing.T) {
 	deps, profile := setup(t)
-	src := New(deps)
+	src := New(deps, func(p string) (Tailer, error) { return tailer.New(p) })
 	found := discovery.LocateCacheKey(profile.Dir, "found")
 	missing := discovery.LocateCacheKey(profile.Dir, "missing")
 	deps.LocateCache.Set(found, discovery.LocateEntry{Kind: discovery.LocateFound, Project: "-p"})
@@ -91,5 +123,44 @@ func TestForgetSessionDropsOnlyFoundLocations(t *testing.T) {
 
 	if got := deps.LocateCache.Keys(); !reflect.DeepEqual(got, []string{missing}) {
 		t.Errorf("keys = %v", got)
+	}
+}
+
+func TestFileReaderResetAndWarnings(t *testing.T) {
+	deps, _ := setup(t)
+	dir := t.TempDir()
+	file := filepath.Join(dir, "t.jsonl")
+	src := New(deps, func(p string) (Tailer, error) { return tailer.New(p, tailer.WithMaxLineBytes(50)) })
+
+	writeFile(t, file, "{\"a\":1}\n"+strings.Repeat("x", 100)+"\n")
+	reader, err := src.OpenTranscript(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	got, err := reader.Read()
+	if err != nil || got.Reset || len(got.Events) != 1 ||
+		!reflect.DeepEqual(got.Warnings, []string{"oversized line dropped: " + file}) {
+		t.Fatalf("Read = %+v, %v", got, err)
+	}
+
+	// Truncated: the reader reports the reset and nothing else.
+	writeFile(t, file, "")
+	got, err = reader.Read()
+	if err != nil || !got.Reset || len(got.Events) != 0 || len(got.Warnings) != 0 {
+		t.Errorf("truncated Read = %+v, %v", got, err)
+	}
+
+	// Rotated: removed and recreated.
+	writeFile(t, file, "{\"a\":1}\n{\"b\":2}\n")
+	if _, err := reader.Read(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(file); err != nil {
+		t.Fatal(err)
+	}
+	got, err = reader.Read()
+	if err != nil || !got.Reset {
+		t.Errorf("removed Read = %+v, %v", got, err)
 	}
 }
