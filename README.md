@@ -21,7 +21,8 @@ What you see:
 - **Session boxes**: title, model and effort, context usage, active and total agents,
   pull request links (`#201`, clickable in the terminal) and the session state, colored
   by state: busy (yellow), shell (cyan, a background command is running), waiting (red,
-  it needs you) and idle (green).
+  it needs you), idle (green) and pending (gray, a background session that has not
+  started yet).
 - **Agent boxes**: agent name, model, duration and what it is doing right now (writing
   code, reading, searching, running tests, building, git...).
 - **Detail view** (Enter): every agent of the session, including finished ones, with
@@ -128,7 +129,7 @@ All optional and independent of `[profiles]`; the defaults are the standard look
 [theme]
 preset = "dark"                  # dark | light
 busy = "yellow"                  # per role: muted accent busy shell waiting idle
-waiting = "#ff5f5f"              #   done failed ok warn critical link
+waiting = "#ff5f5f"              #   pending done failed ok warn critical link
 profiles = ["magenta", "blue"]   # palette of the profiles (cycles)
 
 [glyphs]

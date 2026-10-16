@@ -79,6 +79,16 @@ func TestResolveTheme(t *testing.T) {
 	}
 }
 
+func TestPendingRole(t *testing.T) {
+	if DarkTheme.Pending != "#8a8a8a" || LightTheme.Pending != "#9e9e9e" {
+		t.Errorf("pending colors: dark=%q light=%q", DarkTheme.Pending, LightTheme.Pending)
+	}
+	th := ResolveTheme(ThemeConfig{Colors: map[string]Color{"pending": "blue"}})
+	if th.Pending != "blue" || *th.Role("pending") != "blue" {
+		t.Errorf("pending override = %q", th.Pending)
+	}
+}
+
 func TestANSIIndex(t *testing.T) {
 	tests := []struct {
 		name string
