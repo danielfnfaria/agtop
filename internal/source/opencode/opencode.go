@@ -3,10 +3,11 @@
 // per profile; it never writes the database or its WAL and never checkpoints, though SQLite may
 // create the shared-memory -shm file, as any WAL reader does) and queries for metadata only.
 //
-// A root session (no parent, not archived) is live while it had activity in the last
-// IdleTimeoutMs, or while an assistant message is still open or a tool still runs. Child
-// sessions (parent_id set) are the agents of their parent. There is no process registry:
-// sessions have no pid, and a permission request is not persisted, so "waiting" is never shown.
+// A root session (no parent, not archived) is live while an opencode process runs with the
+// session's directory as its cwd and the session was touched since that process started: the
+// TUI is one process per project directory, and there is no registry to say which session it
+// shows. The pid of the session is that process (the newest, if several). A permission request
+// is not persisted, so "waiting" is never shown.
 //
 // References handed to the store are opaque strings: "opencode:<sessionID>" is a transcript,
 // "opencode:<sessionID>/agents" the agents of a session and "opencode:<sessionID>/meta" the
@@ -17,6 +18,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,18 +28,18 @@ import (
 	"github.com/danielfnfaria/agtop/internal/discovery"
 	"github.com/danielfnfaria/agtop/internal/domain"
 	"github.com/danielfnfaria/agtop/internal/ingest/watcher"
+	"github.com/danielfnfaria/agtop/internal/proc"
 	"github.com/danielfnfaria/agtop/internal/source"
 )
 
 const (
-	// IdleTimeoutMs: a session without activity for this long is no longer live.
-	IdleTimeoutMs = 10 * 60_000
-	// stuckWindowMs: an open assistant message or a running tool older than this (opencode
-	// crashed or was killed mid-turn) no longer keeps the session live.
-	stuckWindowMs = 2 * 60 * 60_000
-	// candidateWindowMs: only sessions updated within it are examined (the liveness query is
-	// per session).
-	candidateWindowMs = 24 * 60 * 60_000
+	// ProcessName is the executable (and process name) of the opencode TUI.
+	ProcessName = "opencode"
+	// startSlackMs: a session touched up to this long before its process started still belongs
+	// to it (the process clock and the database clock are not the same instant).
+	startSlackMs = 5_000
+	// CodeProcesses: the processes could not be listed.
+	CodeProcesses = "PROC_LIST"
 
 	refPrefix    = "opencode:"
 	agentsSuffix = "/agents"
@@ -58,13 +60,16 @@ type Options struct {
 	Homedir string
 	// Now is the clock in epoch ms.
 	Now func() int64
+	// ListProcesses lists the live opencode processes (default: proc.List over the system).
+	ListProcesses func() ([]proc.Process, error)
 }
 
 // Source is the opencode source. It is safe for concurrent use and must be closed (Close)
 // to release the connections.
 type Source struct {
-	now    func() int64
-	models *catalog
+	now           func() int64
+	listProcesses func() ([]proc.Process, error)
+	models        *catalog
 
 	mu     sync.Mutex
 	dbs    map[string]*profileDB // by profile directory
@@ -90,11 +95,16 @@ func New(opts Options) *Source {
 	if home == "" {
 		home, _ = os.UserHomeDir()
 	}
+	list := opts.ListProcesses
+	if list == nil {
+		list = func() ([]proc.Process, error) { return proc.List(ProcessName) }
+	}
 	return &Source{
-		now:    now,
-		models: newCatalog(ModelsPath(env, home)),
-		dbs:    map[string]*profileDB{},
-		refs:   map[string]refInfo{},
+		now:           now,
+		listProcesses: list,
+		models:        newCatalog(ModelsPath(env, home)),
+		dbs:           map[string]*profileDB{},
+		refs:          map[string]refInfo{},
 	}
 }
 
@@ -145,16 +155,28 @@ func (s *Source) dbOf(sessionID string) (*profileDB, bool) {
 	return r.db, ok
 }
 
-// Discover lists the live root sessions of each profile. A profile whose database cannot be
-// read gets an issue (file opencode.db) and no sessions; the first such failure is also
-// returned with the (partial) result.
+// Discover lists the live root sessions of each profile: those of the running opencode
+// processes. Without a process nothing is live and the database is not queried. A profile whose
+// database cannot be read gets an issue (file opencode.db) and no sessions; the first such
+// failure is also returned with the (partial) result.
 func (s *Source) Discover(profiles []config.ProfileDir) (discovery.Result, error) {
 	now := s.now()
 	result := discovery.Result{ScannedAt: now}
+	procs, err := s.listProcesses()
+	if err != nil {
+		for _, profile := range profiles {
+			result.Profiles = append(result.Profiles, discovery.ProfileDiscovery{Profile: profile})
+		}
+		return result, codedErr(CodeProcesses, err)
+	}
+	byCwd := processesByCwd(procs)
 	var firstErr error
 	for _, profile := range profiles {
 		pd := discovery.ProfileDiscovery{Profile: profile}
-		roots, err := s.discoverProfile(profile, now)
+		var roots []discovery.DiscoveredSession
+		if len(byCwd) > 0 {
+			roots, err = s.discoverProfile(profile, byCwd)
+		}
 		if err != nil {
 			pd.Diagnostics.Issues = []discovery.RegistryIssue{{File: config.OpencodeDBName, Reason: discovery.IssueDatabase}}
 			if firstErr == nil {
@@ -167,7 +189,37 @@ func (s *Source) Discover(profiles []config.ProfileDir) (discovery.Result, error
 	return result, firstErr
 }
 
-func (s *Source) discoverProfile(profile config.ProfileDir, now int64) ([]discovery.DiscoveredSession, error) {
+// processesByCwd groups the processes by their resolved cwd, each group newest first; processes
+// without a readable cwd are dropped.
+func processesByCwd(procs []proc.Process) map[string][]proc.Process {
+	out := map[string][]proc.Process{}
+	for _, p := range procs {
+		if p.Cwd == "" || p.PID <= 0 {
+			continue
+		}
+		dir := resolveDir(p.Cwd)
+		out[dir] = append(out[dir], p)
+	}
+	for dir, group := range out {
+		slices.SortStableFunc(group, func(a, b proc.Process) int { return b.Start.Compare(a.Start) })
+		out[dir] = group
+	}
+	return out
+}
+
+// resolveDir is the canonical form of a directory for the cwd comparison: cleaned, symlinks
+// resolved when it exists.
+func resolveDir(dir string) string {
+	dir = filepath.Clean(dir)
+	if real, err := filepath.EvalSymlinks(dir); err == nil {
+		return real
+	}
+	return dir
+}
+
+// discoverProfile is the live sessions of a profile: the root sessions whose directory is the
+// cwd of a running process and that were touched since the process started.
+func (s *Source) discoverProfile(profile config.ProfileDir, byCwd map[string][]proc.Process) ([]discovery.DiscoveredSession, error) {
 	db, err := s.dbFor(profile)
 	if err != nil {
 		return nil, err
@@ -176,32 +228,59 @@ func (s *Source) discoverProfile(profile config.ProfileDir, now int64) ([]discov
 	if err != nil {
 		return nil, err
 	}
-	roots, err := selectRoots(conn, now-candidateWindowMs, now-stuckWindowMs)
+	roots, err := selectRoots(conn)
 	if err != nil {
 		return nil, err
 	}
+	resolved := map[string]string{}
 	var live []discovery.DiscoveredSession
 	for _, r := range roots {
-		if r.ID == "" || !r.InProgress && r.LastActivity < now-IdleTimeoutMs {
+		if r.ID == "" || r.Directory == "" {
 			continue
 		}
-		activity := discovery.ActivityIdle
-		if r.InProgress {
-			activity = discovery.ActivityBusy
+		dir, ok := resolved[r.Directory]
+		if !ok {
+			dir = resolveDir(r.Directory)
+			resolved[r.Directory] = dir
+		}
+		group := byCwd[dir]
+		if len(group) == 0 {
+			continue
+		}
+		activity, err := selectActivity(conn, r)
+		if err != nil {
+			return nil, err
+		}
+		// The newest process is the session's; any of them started before the last touch
+		// vouches for it.
+		owner := group[0]
+		oldest := group[len(group)-1]
+		if !oldest.Start.IsZero() && activity.LastActivity < oldest.Start.UnixMilli()-startSlackMs {
+			continue
+		}
+		var processStart int64
+		if !owner.Start.IsZero() {
+			processStart = owner.Start.UnixMilli()
+		}
+		state := discovery.ActivityIdle
+		if activity.InProgress {
+			state = discovery.ActivityBusy
 		}
 		id := domain.Sanitize(r.ID, idMax)
 		s.remember(r.ID, db, "")
 		live = append(live, discovery.DiscoveredSession{
 			LiveSessionRecord: discovery.LiveSessionRecord{
-				Profile:   profile,
-				SessionID: id,
-				Cwd:       domain.Sanitize(r.Directory, pathMax),
-				Version:   domain.Sanitize(r.Version, nameMax),
-				Name:      domain.Sanitize(r.Title, textMax),
-				Activity:  activity,
-				UpdatedAt: r.LastActivity,
-				StartedAt: r.TimeCreated,
-				Alive:     true,
+				Profile:          profile,
+				PID:              owner.PID,
+				SessionID:        id,
+				Cwd:              domain.Sanitize(r.Directory, pathMax),
+				Version:          domain.Sanitize(r.Version, nameMax),
+				Name:             domain.Sanitize(r.Title, textMax),
+				Activity:         state,
+				UpdatedAt:        activity.LastActivity,
+				StartedAt:        r.TimeCreated,
+				ProcessStartedAt: processStart,
+				Alive:            true,
 			},
 			Key:   discovery.SessionKey(profile, id),
 			Files: discovery.SessionFiles{TranscriptPath: transcriptRef(r.ID), SubagentsDir: agentsRef(r.ID)},

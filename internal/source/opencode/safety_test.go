@@ -70,7 +70,7 @@ func TestSecretsNeverLeave(t *testing.T) {
 		t.Fatalf("sessions = %d, errors = %v", len(snap.Sessions), snap.Errors)
 	}
 	v := snap.Sessions[0]
-	if v.DisplayTitle != "Safe title" || v.Activity != "busy" || v.PID != 0 || len(v.PendingTools) != 1 {
+	if v.DisplayTitle != "Safe title" || v.Activity != "busy" || v.PID != 55813 || len(v.PendingTools) != 1 {
 		t.Errorf("view = title %q activity %q pid %d pending %d", v.DisplayTitle, v.Activity, v.PID, len(v.PendingTools))
 	}
 	agent, ok := v.Agents[child]
@@ -206,7 +206,8 @@ func TestStoreEndToEnd(t *testing.T) {
 	}
 	v := snap.Sessions[0]
 	if v.Provider != domain.Opencode || v.DisplayTitle != "End to end" || v.Activity != "busy" || v.Cwd != "/home/u/proj" ||
-		v.Model == nil || v.Model.ID != model || v.Model.Name != "Claude Sonnet 4.5" {
+		v.Model == nil || v.Model.ID != model || v.Model.Name != "Claude Sonnet 4.5" ||
+		v.PID != 55813 || v.ProcessStart != now-2*hour || v.StartedAt != now-hour {
 		t.Errorf("view = %+v", v)
 	}
 	if v.ContextWindow != (domain.ContextWindow{Size: 200_000, Source: domain.SourceReported}) || v.ContextUsed != 50_000 || v.ContextPercent != 25 {

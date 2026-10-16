@@ -63,7 +63,7 @@ func checkSchema(db *sql.DB) error {
 	return nil
 }
 
-// rootRow is a root session with the signals of its liveness.
+// rootRow is a root session (no parent, not archived).
 type rootRow struct {
 	ID          string
 	Directory   string
@@ -72,33 +72,18 @@ type rootRow struct {
 	ModelID     string
 	TimeCreated int64
 	TimeUpdated int64
-	// LastActivity is the latest time_updated of the session, its messages, its parts and its
-	// child sessions.
-	LastActivity int64
-	// InProgress: an assistant message without time.completed or a tool part pending/running,
-	// updated within the stuck window.
-	InProgress bool
 }
 
 var queryRoots = `
-SELECT s.id, s.directory, s.title, s.version, s.time_created, s.time_updated,
-  json_extract(s.model, '$.id'),
-  COALESCE((SELECT MAX(m.time_updated) FROM message m WHERE m.session_id = s.id), 0),
-  COALESCE((SELECT MAX(p.time_updated) FROM part p WHERE p.session_id = s.id), 0),
-  COALESCE((SELECT MAX(c.time_updated) FROM session c WHERE c.parent_id = s.id), 0),
-  EXISTS(SELECT 1 FROM message m WHERE m.session_id = s.id AND m.time_updated >= ?2
-    AND json_extract(m.data, '$.role') = 'assistant' AND json_extract(m.data, '$.time.completed') IS NULL),
-  EXISTS(SELECT 1 FROM part p WHERE p.session_id = s.id AND p.time_updated >= ?2
-    AND json_extract(p.data, '$.type') = 'tool' AND json_extract(p.data, '$.state.status') IN ('pending', 'running'))
-FROM session s
-WHERE s.parent_id IS NULL AND s.time_archived IS NULL AND s.time_updated >= ?1
-ORDER BY s.time_updated DESC
+SELECT id, directory, title, version, time_created, time_updated, json_extract(model, '$.id')
+FROM session
+WHERE parent_id IS NULL AND time_archived IS NULL
+ORDER BY time_updated DESC
 LIMIT ` + itoa(maxRoots)
 
-// selectRoots lists the root sessions updated since candidateSince, with their activity; the
-// in-progress signals only count when updated since stuckSince.
-func selectRoots(db *sql.DB, candidateSince, stuckSince int64) ([]rootRow, error) {
-	rows, err := db.Query(queryRoots, candidateSince, stuckSince)
+// selectRoots lists the most recently updated root sessions (cheap: the session table alone).
+func selectRoots(db *sql.DB) ([]rootRow, error) {
+	rows, err := db.Query(queryRoots)
 	if err != nil {
 		return nil, codedErr(CodeQuery, err)
 	}
@@ -107,22 +92,50 @@ func selectRoots(db *sql.DB, candidateSince, stuckSince int64) ([]rootRow, error
 	for rows.Next() {
 		var r rootRow
 		var directory, title, version, model sql.NullString
-		var created, updated, msgAt, partAt, childAt sql.NullInt64
-		var openMsg, openTool bool
-		if err := rows.Scan(&r.ID, &directory, &title, &version, &created, &updated, &model,
-			&msgAt, &partAt, &childAt, &openMsg, &openTool); err != nil {
+		var created, updated sql.NullInt64
+		if err := rows.Scan(&r.ID, &directory, &title, &version, &created, &updated, &model); err != nil {
 			return nil, codedErr(CodeQuery, err)
 		}
 		r.Directory, r.Title, r.Version, r.ModelID = directory.String, title.String, version.String, model.String
 		r.TimeCreated, r.TimeUpdated = created.Int64, updated.Int64
-		r.LastActivity = max(r.TimeUpdated, msgAt.Int64, partAt.Int64, childAt.Int64)
-		r.InProgress = openMsg || openTool
 		out = append(out, r)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, codedErr(CodeQuery, err)
 	}
 	return out, nil
+}
+
+// activityRow is what a session is doing.
+type activityRow struct {
+	// LastActivity is the latest time_updated of the session, its messages, its parts and its
+	// child sessions.
+	LastActivity int64
+	// InProgress: an assistant message without time.completed or a tool part pending/running.
+	InProgress bool
+}
+
+var queryActivity = `
+SELECT
+  COALESCE((SELECT MAX(time_updated) FROM message WHERE session_id = ?1), 0),
+  COALESCE((SELECT MAX(time_updated) FROM part WHERE session_id = ?1), 0),
+  COALESCE((SELECT MAX(time_updated) FROM session WHERE parent_id = ?1), 0),
+  EXISTS(SELECT 1 FROM message WHERE session_id = ?1
+    AND json_extract(data, '$.role') = 'assistant' AND json_extract(data, '$.time.completed') IS NULL),
+  EXISTS(SELECT 1 FROM part WHERE session_id = ?1
+    AND json_extract(data, '$.type') = 'tool' AND json_extract(data, '$.state.status') IN ('pending', 'running'))`
+
+// selectActivity reads the activity of one session (whose row is given, for its own time).
+func selectActivity(db *sql.DB, s rootRow) (activityRow, error) {
+	var msgAt, partAt, childAt sql.NullInt64
+	var openMsg, openTool bool
+	if err := db.QueryRow(queryActivity, s.ID).Scan(&msgAt, &partAt, &childAt, &openMsg, &openTool); err != nil {
+		return activityRow{}, codedErr(CodeQuery, err)
+	}
+	return activityRow{
+		LastActivity: max(s.TimeUpdated, msgAt.Int64, partAt.Int64, childAt.Int64),
+		InProgress:   openMsg || openTool,
+	}, nil
 }
 
 // sessionRow is the metadata of one session (root or child).

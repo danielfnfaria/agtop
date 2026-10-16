@@ -512,7 +512,7 @@ func TestCloseConfirm(t *testing.T) {
 			if len(fc.called) != 1 {
 				t.Fatalf("closer called %d times", len(fc.called))
 			}
-			want := closer.Card{ProfileDir: "/tmp/a/.claude", PID: 1234, SessionID: "claude:s1"}
+			want := closer.Card{ProfileDir: "/tmp/a/.claude", PID: 1234, SessionID: "claude:s1", Provider: domain.ClaudeCode}
 			if fc.called[0] != want {
 				t.Errorf("card = %+v, want %+v", fc.called[0], want)
 			}

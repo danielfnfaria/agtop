@@ -213,10 +213,12 @@ exits.
   you quit.
 - The tree shows open sessions (a session that closes stays 30 s marked as ended) and
   only their active agents. The full agent history is in the detail view.
-- opencode keeps no process registry and does not persist permission requests, so an opencode
-  session has no pid, is never shown as waiting, and counts as open while it had activity in
-  the last 10 minutes (or while an assistant turn or a tool is still running, up to 2 h). Its
-  sessions cannot be closed from agtop.
+- opencode keeps no session registry: a session is shown while an `opencode` process runs
+  with the session's directory as its working directory and the session was touched since that
+  process started. So a session resumed from `/sessions` appears at its first new message, two
+  opencode processes in the same directory show the union of their sessions, and the pid shown
+  (and closed by `x`) is the newest such process. Permission requests are not persisted, so an
+  opencode session is never shown as waiting.
 
 ## Development
 

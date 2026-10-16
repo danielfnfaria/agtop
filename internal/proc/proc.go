@@ -75,3 +75,21 @@ func revalidateAndKill(pid int, sig syscall.Signal, want Info,
 	}
 	return kill(pid, sig)
 }
+
+// Process is one running process as List reports it.
+type Process struct {
+	PID int
+	// Name is the process name (comm); Exe the executable path when readable.
+	Name string
+	Exe  string
+	// Cwd is the current working directory; empty when unreadable (another user's process).
+	Cwd string
+	// Start is the process start time in UTC; zero when unknown.
+	Start time.Time
+}
+
+// List enumerates the live processes whose name (comm) or executable base name is name, with
+// their cwd and start time. Processes that cannot be inspected are skipped, not reported.
+func List(name string) ([]Process, error) {
+	return list(name)
+}

@@ -4,6 +4,8 @@ package proc
 
 import (
 	"encoding/binary"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -44,4 +46,44 @@ func TestCString(t *testing.T) {
 	if got := cString([]byte("bar")); got != "bar" {
 		t.Errorf("got %q", got)
 	}
+}
+
+func TestParseVnodePathInfo(t *testing.T) {
+	buf := make([]byte, vnodePathInfoSize)
+	copy(buf[vnodeInfoSize:], "/Users/u/proj\x00")
+	copy(buf[vnodeInfoPathSize+vnodeInfoSize:], "/\x00")
+	if got := parseVnodePathInfo(buf); got != "/Users/u/proj" {
+		t.Errorf("cwd = %q", got)
+	}
+	if got := parseVnodePathInfo(buf[:10]); got != "" {
+		t.Errorf("short buffer = %q", got)
+	}
+	if got := exeFromProcArgs2(append([]byte{1, 0, 0, 0}, "/opt/opencode\x00argv\x00"...)); got != "/opt/opencode" {
+		t.Errorf("exe = %q", got)
+	}
+	if got := exeFromProcArgs2([]byte{1, 0}); got != "" {
+		t.Errorf("short args = %q", got)
+	}
+}
+
+func TestListFindsSelf(t *testing.T) {
+	self, err := Lookup(os.Getpid())
+	if err != nil {
+		t.Fatal(err)
+	}
+	procs, err := List(self.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wd, _ := os.Getwd()
+	wd, _ = filepath.EvalSymlinks(wd)
+	for _, p := range procs {
+		if p.PID == os.Getpid() {
+			if p.Cwd != wd || p.Start.IsZero() || p.Exe == "" {
+				t.Errorf("self = %+v, want cwd %q", p, wd)
+			}
+			return
+		}
+	}
+	t.Errorf("self (pid %d, %q) not listed in %d processes", os.Getpid(), self.Name, len(procs))
 }

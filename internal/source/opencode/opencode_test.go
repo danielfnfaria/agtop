@@ -2,17 +2,20 @@ package opencode_test
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/danielfnfaria/agtop/internal/config"
 	"github.com/danielfnfaria/agtop/internal/discovery"
 	"github.com/danielfnfaria/agtop/internal/domain"
 	"github.com/danielfnfaria/agtop/internal/domain/reduce"
 	"github.com/danielfnfaria/agtop/internal/ingest/watcher"
+	"github.com/danielfnfaria/agtop/internal/proc"
 	"github.com/danielfnfaria/agtop/internal/source"
 	"github.com/danielfnfaria/agtop/internal/source/opencode"
 )
@@ -25,9 +28,30 @@ const (
 	model       = "claude-sonnet-4-5"
 )
 
+// procStart is the start of the default test process: two hours ago.
+var procStart = time.UnixMilli(now - 2*hour).UTC()
+
+// procAt is an opencode process with cwd dir started at start.
+func procAt(pid int, dir string, start time.Time) proc.Process {
+	return proc.Process{PID: pid, Name: "opencode", Exe: "/home/u/.opencode/bin/opencode", Cwd: dir, Start: start}
+}
+
+// newSource is the source with one opencode process in the fixture's project directory.
 func newSource(t *testing.T, f *fixture) *opencode.Source {
 	t.Helper()
-	s := opencode.New(opencode.Options{Env: config.Env{"XDG_CACHE_HOME": filepath.Join(f.dir, "cache")}, Homedir: f.dir, Now: func() int64 { return now }})
+	return newSourceWith(t, f, []proc.Process{procAt(55813, "/home/u/proj", procStart)})
+}
+
+// newSourceWith is the source over a fixed process list (nil lists nothing).
+func newSourceWith(t *testing.T, f *fixture, procs []proc.Process) *opencode.Source {
+	t.Helper()
+	return newSourceListing(t, f, func() ([]proc.Process, error) { return procs, nil })
+}
+
+func newSourceListing(t *testing.T, f *fixture, list func() ([]proc.Process, error)) *opencode.Source {
+	t.Helper()
+	s := opencode.New(opencode.Options{Env: config.Env{"XDG_CACHE_HOME": filepath.Join(f.dir, "cache")}, Homedir: f.dir,
+		Now: func() int64 { return now }, ListProcesses: list})
 	t.Cleanup(func() { _ = s.Close() })
 	return s
 }
@@ -71,28 +95,30 @@ func kinds(events []domain.TranscriptEvent) []string {
 
 func TestDiscover(t *testing.T) {
 	f := newFixture(t)
-	// Idle but recent: live.
+	// Idle for an hour, but its process runs: live.
 	f.addSession(sessionSpec{ID: "ses_recent", Title: "Recent work", Model: model, Created: now - hour, Updated: now - hour})
 	f.addMessage("ses_recent", "msg_r1", now-hour, now-hour, userData(now-hour, model))
-	f.addPart("ses_recent", "msg_r1", "prt_r1", now-2*minute, now-2*minute, textData("hello"))
-	// Old: not live.
+	f.addPart("ses_recent", "msg_r1", "prt_r1", now-50*minute, now-50*minute, textData("hello"))
+	// Untouched since the process started: not live (an older session of the same directory).
 	f.addSession(sessionSpec{ID: "ses_old", Title: "Old", Model: model, Created: now - 3*hour, Updated: now - 3*hour})
 	f.addMessage("ses_old", "msg_o1", now-3*hour, now-3*hour, userData(now-3*hour, model))
 	// Busy: an assistant message without time.completed.
 	f.addSession(sessionSpec{ID: "ses_busy", Title: "Busy", Model: model, Created: now - hour, Updated: now - 20*minute})
 	f.addMessage("ses_busy", "msg_b1", now-20*minute, now-20*minute, assistantData("ses_busy", model, now-20*minute, 0, "", tokens{}))
-	// Busy by a running tool, with an old session row.
+	// Busy by a running tool, with an old session row (touched after the process start by the part).
 	f.addSession(sessionSpec{ID: "ses_tool", Title: "Tool", Model: model, Created: now - 5*hour, Updated: now - 5*hour})
 	f.addMessage("ses_tool", "msg_t1", now-5*hour, now-5*hour, assistantData("ses_tool", model, now-5*hour, now-5*hour+1, "tool-calls", tokens{}))
 	f.addPart("ses_tool", "msg_t1", "prt_t1", now-30*minute, now-30*minute,
 		toolData("bash", "call_t1", "running", map[string]any{"command": "go test ./..."}, nil, "", now-30*minute, 0))
-	// Stuck: an open message older than the stuck window is not live.
+	// In progress but from before the process: not live (the process gate, no idle rule).
 	f.addSession(sessionSpec{ID: "ses_stuck", Title: "Stuck", Model: model, Created: now - 4*hour, Updated: now - 4*hour})
 	f.addMessage("ses_stuck", "msg_s1", now-4*hour, now-4*hour, assistantData("ses_stuck", model, now-4*hour, 0, "", tokens{}))
 	// Archived: never live.
 	f.addSession(sessionSpec{ID: "ses_arch", Title: "Archived", Model: model, Created: now - minute, Updated: now - minute, Archived: now - minute})
+	// Another directory without a process: not live.
+	f.addSession(sessionSpec{ID: "ses_other", Title: "Other", Dir: "/home/u/other", Model: model, Created: now - minute, Updated: now - minute})
 	// A child session is not a root, and its activity keeps the parent live.
-	f.addSession(sessionSpec{ID: "ses_parent", Title: "Parent", Model: model, Created: now - hour, Updated: now - hour})
+	f.addSession(sessionSpec{ID: "ses_parent", Title: "Parent", Model: model, Created: now - 3*hour, Updated: now - 3*hour})
 	f.addSession(sessionSpec{ID: "ses_child", Parent: "ses_parent", Title: "Scan (@explore subagent)", Agent: "explore", Model: model, Created: now - 5*minute, Updated: now - 5*minute})
 
 	s := newSource(t, f)
@@ -112,7 +138,7 @@ func TestDiscover(t *testing.T) {
 		if d.SessionID != "ses_recent" {
 			continue
 		}
-		if d.PID != 0 || d.Name != "Recent work" || d.Cwd != "/home/u/proj" || d.Version != "1.19.3" ||
+		if d.PID != 55813 || d.ProcessStartedAt != now-2*hour || d.Name != "Recent work" || d.Cwd != "/home/u/proj" || d.Version != "1.19.3" ||
 			d.StartedAt != now-hour || d.Key != "oc:ses_recent" ||
 			d.Files.TranscriptPath != "opencode:ses_recent" || d.Files.SubagentsDir != "opencode:ses_recent/agents" {
 			t.Errorf("record = %+v", d)
@@ -142,9 +168,93 @@ func TestDiscover(t *testing.T) {
 	}
 }
 
+// TestDiscoverByProcess: the process list decides what is live.
+func TestDiscoverByProcess(t *testing.T) {
+	f := newFixture(t)
+	f.addSession(sessionSpec{ID: "ses_a", Title: "A", Model: model, Created: now - hour, Updated: now - hour})
+	f.addSession(sessionSpec{ID: "ses_b", Title: "B", Model: model, Created: now - 10*minute, Updated: now - 10*minute})
+	f.addSession(sessionSpec{ID: "ses_c", Title: "C", Dir: "/home/u/other", Model: model, Created: now - minute, Updated: now - minute})
+
+	t.Run("no process: nothing, and the database is not even needed", func(t *testing.T) {
+		s := newSourceWith(t, f, nil)
+		if got := liveIDs(discoverOne(t, s, f)); len(got) != 0 {
+			t.Errorf("live = %v", got)
+		}
+		dir := t.TempDir()
+		res, err := s.Discover([]config.ProfileDir{{Label: "none", Dir: dir, Provider: domain.Opencode}})
+		if err != nil || len(res.Profiles) != 1 || len(res.Profiles[0].Diagnostics.Issues) != 0 {
+			t.Errorf("without database: %v %+v", err, res)
+		}
+	})
+	t.Run("two processes in the same directory: the union, pid of the newest", func(t *testing.T) {
+		older, newer := procAt(100, "/home/u/proj", time.UnixMilli(now-2*hour).UTC()), procAt(200, "/home/u/proj", time.UnixMilli(now-30*minute).UTC())
+		s := newSourceWith(t, f, []proc.Process{older, newer})
+		pd := discoverOne(t, s, f)
+		got := liveIDs(pd)
+		if len(got) != 2 || got["ses_a"] == "" || got["ses_b"] == "" {
+			t.Errorf("live = %v", got)
+		}
+		for _, d := range pd.Live {
+			if d.PID != 200 || d.ProcessStartedAt != now-30*minute {
+				t.Errorf("%s: pid %d start %d, want the newest process", d.SessionID, d.PID, d.ProcessStartedAt)
+			}
+		}
+	})
+	t.Run("a process per directory, with a symlinked cwd", func(t *testing.T) {
+		real := filepath.Join(f.dir, "real")
+		link := filepath.Join(f.dir, "link")
+		if err := os.MkdirAll(real, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(real, link); err != nil {
+			t.Fatal(err)
+		}
+		f.addSession(sessionSpec{ID: "ses_link", Title: "Link", Dir: link + "/", Model: model, Created: now - minute, Updated: now - minute})
+		s := newSourceWith(t, f, []proc.Process{procAt(300, "/home/u/other", procStart), procAt(400, real, procStart)})
+		got := liveIDs(discoverOne(t, s, f))
+		if len(got) != 2 || got["ses_c"] == "" || got["ses_link"] == "" {
+			t.Errorf("live = %v", got)
+		}
+	})
+	t.Run("a process without a cwd or with an unknown start", func(t *testing.T) {
+		blind := proc.Process{PID: 500, Name: "opencode"}
+		noStart := proc.Process{PID: 600, Name: "opencode", Cwd: "/home/u/proj"}
+		s := newSourceWith(t, f, []proc.Process{blind, noStart})
+		pd := discoverOne(t, s, f)
+		if got := liveIDs(pd); len(got) != 2 {
+			t.Errorf("live = %v", got)
+		}
+		for _, d := range pd.Live {
+			if d.PID != 600 || d.ProcessStartedAt != 0 {
+				t.Errorf("%s: pid %d start %d", d.SessionID, d.PID, d.ProcessStartedAt)
+			}
+		}
+	})
+	t.Run("the process exits: the session leaves on the next scan", func(t *testing.T) {
+		var procs []proc.Process
+		s := newSourceListing(t, f, func() ([]proc.Process, error) { return procs, nil })
+		procs = []proc.Process{procAt(700, "/home/u/proj", procStart)}
+		if got := liveIDs(discoverOne(t, s, f)); len(got) != 2 {
+			t.Errorf("running: %v", got)
+		}
+		procs = nil
+		if got := liveIDs(discoverOne(t, s, f)); len(got) != 0 {
+			t.Errorf("exited: %v", got)
+		}
+	})
+	t.Run("the process list fails: a coded error, no sessions", func(t *testing.T) {
+		s := newSourceListing(t, f, func() ([]proc.Process, error) { return nil, errors.New("sysctl: boom") })
+		res, err := s.Discover([]config.ProfileDir{f.profile()})
+		if opencode.ErrorCode(err) != opencode.CodeProcesses || len(res.Profiles) != 1 || len(res.Profiles[0].Live) != 0 {
+			t.Errorf("err = %v, res = %+v", err, res)
+		}
+	})
+}
+
 func TestDiscoverWithoutDatabase(t *testing.T) {
 	dir := t.TempDir()
-	s := opencode.New(opencode.Options{Now: func() int64 { return now }, Homedir: dir, Env: config.Env{}})
+	s := opencode.New(opencode.Options{Now: func() int64 { return now }, Homedir: dir, Env: config.Env{},
+		ListProcesses: func() ([]proc.Process, error) { return []proc.Process{procAt(1, "/home/u/proj", procStart)}, nil }})
 	defer func() { _ = s.Close() }()
 	profile := config.ProfileDir{Label: "oc", Dir: dir, Provider: domain.Opencode}
 	res, err := s.Discover([]config.ProfileDir{profile})
@@ -443,7 +553,8 @@ func TestSchemaMismatch(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "opencode.db"), []byte("hello"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		s := opencode.New(opencode.Options{Now: func() int64 { return now }, Homedir: dir, Env: config.Env{}})
+		s := opencode.New(opencode.Options{Now: func() int64 { return now }, Homedir: dir, Env: config.Env{},
+			ListProcesses: func() ([]proc.Process, error) { return []proc.Process{procAt(1, "/home/u/proj", procStart)}, nil }})
 		defer func() { _ = s.Close() }()
 		_, err := s.Discover([]config.ProfileDir{{Label: "oc", Dir: dir, Provider: domain.Opencode}})
 		if code := opencode.ErrorCode(err); code != opencode.CodeQuery && code != opencode.CodeOpen {

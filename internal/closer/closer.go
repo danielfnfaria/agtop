@@ -1,5 +1,6 @@
-// Package closer validates a Claude Code session against its registry record and the live
-// process, and only then sends SIGTERM to it. It never signals SIGKILL.
+// Package closer validates a session against its registry record (Claude Code) or its process
+// identity (opencode: pid, start time and executable) and the live process, and only then sends
+// SIGTERM to it. It never signals SIGKILL.
 package closer
 
 import (
@@ -12,8 +13,12 @@ import (
 	"strconv"
 	"syscall"
 
+	"github.com/danielfnfaria/agtop/internal/domain"
 	"github.com/danielfnfaria/agtop/internal/proc"
 )
+
+// opencodeProcessName is the executable (and comm) of the opencode TUI.
+const opencodeProcessName = "opencode"
 
 // startToleranceMs is the most the real process start may differ from the registry startedAt.
 const startToleranceMs = 10_000
@@ -27,6 +32,11 @@ type Card struct {
 	// StartedAt is the startedAt of sessions/<pid>.json (epoch ms); 0 is absent.
 	StartedAt int64
 	Kind      string
+	// Provider is the provider of the session; empty means Claude Code.
+	Provider domain.ProviderID
+	// ProcessStart is the start of the process at PID as discovery saw it (epoch ms), for
+	// opencode, which has no registry record; 0 is absent.
+	ProcessStart int64
 }
 
 // Process is the identity of agtop itself: the processes Close refuses to signal.
@@ -99,7 +109,9 @@ var (
 	ErrNotAlive      = errors.New("process is not alive")
 	ErrNotOwner      = errors.New("process is owned by another user")
 	ErrNotClaude     = errors.New("process is not Claude Code")
+	ErrNotOpencode   = errors.New("process is not opencode")
 	ErrStartMismatch = errors.New("process start does not match the session")
+	ErrProvider      = errors.New("sessions of this provider cannot be closed")
 )
 
 // Close validates the record and the process and, only if every rule holds, sends SIGTERM to
@@ -112,6 +124,13 @@ func (c *Closer) Close(card Card) error {
 	self := c.deps.Self
 	if card.PID == self.PID || card.PID == self.PPID {
 		return fmt.Errorf("%w: pid %d", ErrSelfOrParent, card.PID)
+	}
+	switch card.Provider {
+	case "", domain.ClaudeCode:
+	case domain.Opencode:
+		return c.closeOpencode(card)
+	default:
+		return fmt.Errorf("%w: %s", ErrProvider, card.Provider)
 	}
 
 	rec, err := c.readRecord(card)
@@ -162,6 +181,50 @@ func (c *Closer) Close(card Card) error {
 		return fmt.Errorf("signal %d: %w", card.PID, err)
 	}
 	return nil
+}
+
+// closeOpencode closes an opencode session: there is no registry record, so the identity is the
+// pid, the process start discovery saw and the executable. Fail closed on any unknown.
+func (c *Closer) closeOpencode(card Card) error {
+	if card.ProcessStart <= 0 {
+		return fmt.Errorf("%w: pid %d (process start is absent)", ErrStartMismatch, card.PID)
+	}
+	info, err := c.deps.Proc.Lookup(card.PID)
+	if err != nil {
+		if errors.Is(err, proc.ErrNotFound) {
+			return fmt.Errorf("%w: pid %d", ErrNotAlive, card.PID)
+		}
+		return fmt.Errorf("inspect process %d: %w", card.PID, err)
+	}
+	if info.Owner != c.deps.Self.UID {
+		return fmt.Errorf("%w: pid %d (uid %d, running as %d)", ErrNotOwner, card.PID, info.Owner, c.deps.Self.UID)
+	}
+	if !isOpencode(info) {
+		return fmt.Errorf("%w: pid %d runs %q", ErrNotOpencode, card.PID, info.Name)
+	}
+	started := info.StartMillis()
+	if started <= 0 {
+		return fmt.Errorf("%w: pid %d (process start is unknown)", ErrStartMismatch, card.PID)
+	}
+	if diff := started - card.ProcessStart; abs64(diff) > startToleranceMs {
+		return fmt.Errorf("%w: pid %d (started %dms from the session)", ErrStartMismatch, card.PID, diff)
+	}
+	if err := c.deps.Signal.Signal(card.PID, syscall.SIGTERM, info); err != nil {
+		if errors.Is(err, proc.ErrNotFound) {
+			return fmt.Errorf("%w: pid %d", ErrNotAlive, card.PID)
+		}
+		return fmt.Errorf("signal %d: %w", card.PID, err)
+	}
+	return nil
+}
+
+// isOpencode reports whether the process is the opencode binary: its name, or the base name of
+// its executable (argv[0] when the command line is known).
+func isOpencode(info proc.Info) bool {
+	if info.Name == opencodeProcessName {
+		return true
+	}
+	return len(info.Args) > 0 && filepath.Base(info.Args[0]) == opencodeProcessName
 }
 
 // isClaude reports whether the process is Claude Code: the "claude" binary, or node/bun running

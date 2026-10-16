@@ -25,6 +25,7 @@ func discoveredChanged(a, b discovery.DiscoveredSession) bool {
 		a.Name != b.Name ||
 		a.Cwd != b.Cwd ||
 		a.StartedAt != b.StartedAt ||
+		a.ProcessStartedAt != b.ProcessStartedAt ||
 		a.Files.CustomTitle != b.Files.CustomTitle ||
 		a.Files.TranscriptPath != b.Files.TranscriptPath ||
 		a.Files.SubagentsDir != b.Files.SubagentsDir
@@ -179,6 +180,7 @@ func (p projector) project(e *sessionEntry) *SessionView {
 		HasTranscript:  d.Files.TranscriptPath != "",
 		StaleSince:     e.staleSince,
 		StartedAt:      d.StartedAt,
+		ProcessStart:   d.ProcessStartedAt,
 		DisplayTitle:   displayTitle(e, s),
 		Cwd:            s.Cwd,
 		ProjectName:    s.ProjectName,

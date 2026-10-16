@@ -105,6 +105,9 @@ type SessionView struct {
 	StaleSince int64
 	// StartedAt is the startedAt of sessions/<pid>.json (epoch ms).
 	StartedAt int64
+	// ProcessStart is the start of the process at PID as the OS reports it (epoch ms), only for
+	// providers without a registry record (opencode); 0 otherwise.
+	ProcessStart int64
 	// DisplayTitle is customTitle > aiTitle > registry name > last cwd segment > sessionId.
 	DisplayTitle  string
 	Cwd           string

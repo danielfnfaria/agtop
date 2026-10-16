@@ -128,8 +128,11 @@ func parseProcCmdline(b string) []string {
 
 // startTime is the process start time in UTC from the boot-relative starttime ticks. A zero
 // time means the boot time was unreadable.
-func startTime(startTicks uint64) time.Time {
-	b, err := osReadFile("/proc/stat")
+func startTime(startTicks uint64) time.Time { return startTimeIn("/proc", startTicks) }
+
+// startTimeIn is startTime with the boot time read from root/stat.
+func startTimeIn(root string, startTicks uint64) time.Time {
+	b, err := osReadFile(root + "/stat")
 	if err != nil {
 		return time.Time{}
 	}
