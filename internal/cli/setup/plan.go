@@ -99,8 +99,15 @@ var (
 // without the group, as written by hand), PrintCommand, and `<hook> | <original>`. It reports
 // false for anything else.
 func UnwrapCommand(command string) (Unwrapped, bool) {
+	u, _, ok := unwrapHook(command)
+	return u, ok
+}
+
+// unwrapHook is UnwrapCommand plus the part of the command that runs the hook.
+func unwrapHook(command string) (u Unwrapped, hook string, ok bool) {
 	if printOnlyRE.MatchString(command) {
-		return Unwrapped{Print: true}, true
+		hook := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(command), printFlag))
+		return Unwrapped{Print: true}, hook, true
 	}
 	if m := wrappedRE.FindStringSubmatch(command); m != nil && strings.Contains(m[1], hookMarker) {
 		original := m[2]
@@ -110,14 +117,14 @@ func UnwrapCommand(command string) (Unwrapped, bool) {
 			}
 		}
 		if original == "" {
-			return Unwrapped{}, false
+			return Unwrapped{}, "", false
 		}
-		return Unwrapped{Original: original}, true
+		return Unwrapped{Original: original}, strings.TrimSpace(m[1]), true
 	}
 	if m := pipedRE.FindStringSubmatch(command); m != nil {
-		return Unwrapped{Original: m[2]}, true
+		return Unwrapped{Original: m[2]}, strings.TrimSpace(m[1]), true
 	}
-	return Unwrapped{}, false
+	return Unwrapped{}, "", false
 }
 
 // IsHooked reports whether the status line command already runs the hook.
@@ -190,6 +197,9 @@ const (
 	ActionApply
 )
 
+// reasonUnknownForm is why a hooked status line in an unknown form is left alone.
+const reasonUnknownForm = "statusLine runs statusline-hook in a form agtop does not know; edit it by hand"
+
 // Plan is the outcome of PlanSetup or PlanRemove.
 type Plan struct {
 	Action Action
@@ -200,10 +210,15 @@ type Plan struct {
 	Settings *Object
 	// Saved is what setup must remember (PlanSetup only).
 	Saved Saved
+	// Updated: the status line already ran a hook, which now points to the given one
+	// (PlanSetup only).
+	Updated bool
 }
 
 // PlanSetup is what setup does to settings (the parsed settings.json) with the hook command.
-func PlanSetup(settings *Object, hook string) Plan {
+// saved is the current setup.json, if any: when the status line is already hooked to another
+// hook, the original it recorded is kept so --remove still restores the user's command.
+func PlanSetup(settings *Object, hook string, saved *Saved) Plan {
 	current, has := settings.Get("statusLine")
 	if !has {
 		command := PrintCommand(hook)
@@ -221,11 +236,40 @@ func PlanSetup(settings *Object, hook string) Plan {
 		return Plan{Action: ActionSkip, Reason: "statusLine has no command; wire the hook by hand"}
 	}
 	if strings.Contains(cmd, hookMarker) {
-		return Plan{Action: ActionAlready}
+		return planUpdate(settings, cur, cmd, hook, saved)
 	}
 	command := WrapCommand(hook, cmd)
 	after := cur.with("command", command, false)
 	return Plan{Action: ActionApply, Before: cur, After: after, Settings: settings.with("statusLine", after, false), Saved: Saved{Original: cur, Command: command}}
+}
+
+// planUpdate handles a status line that already contains the hook marker: unchanged when it
+// runs the wanted hook, rebuilt around the same original when it runs another one.
+func planUpdate(settings, cur *Object, cmd, hook string, saved *Saved) Plan {
+	un, current, ok := unwrapHook(cmd)
+	if !ok {
+		return Plan{Action: ActionSkip, Reason: reasonUnknownForm}
+	}
+	if current == hook {
+		return Plan{Action: ActionAlready}
+	}
+	var command string
+	var keep Saved
+	if un.Print {
+		command = PrintCommand(hook)
+	} else {
+		command = WrapCommand(hook, un.Original)
+	}
+	switch {
+	case saved != nil && saved.Command == cmd:
+		keep = Saved{Original: saved.Original, Command: command}
+	case un.Print:
+		keep = Saved{Command: command}
+	default:
+		keep = Saved{Original: cur.with("command", un.Original, false), Command: command}
+	}
+	after := cur.with("command", command, false)
+	return Plan{Action: ActionApply, Before: cur, After: after, Settings: settings.with("statusLine", after, false), Saved: keep, Updated: true}
 }
 
 // PlanRemove is what setup --remove does to settings. With saved matching the installed
@@ -248,7 +292,7 @@ func PlanRemove(settings *Object, saved *Saved) Plan {
 	} else {
 		var ok bool
 		if restored, ok = UnwrapCommand(command); !ok {
-			return Plan{Action: ActionSkip, Reason: "statusLine runs statusline-hook in a form agtop does not know; edit it by hand"}
+			return Plan{Action: ActionSkip, Reason: reasonUnknownForm}
 		}
 	}
 	if restored.Print {

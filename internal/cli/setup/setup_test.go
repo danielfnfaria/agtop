@@ -202,12 +202,65 @@ func TestSetup(t *testing.T) {
 		}
 
 		m := profile(t, "manual")
-		manualText := `{"statusLine":{"type":"command","command":` + quote(manual) + `}}`
+		manualText := `{"statusLine":{"type":"command","command":` + quote(strings.Replace(manual, "node /somewhere/dist/cli.js statusline-hook", hook, 1)) + `}}`
 		write(t, settingsOf(m), manualText)
 		r := run(t, []config.ProfileDir{m}, yes())
 		contains(t, "stdout", r.stdout, "[manual] already set up")
 		if read(t, m) != manualText || exists(agtopOf(m)) || len(backups(t, m)) != 0 {
 			t.Error("the hand-written form was touched")
+		}
+	})
+
+	t.Run("a hook that points to another agtop is updated; --remove restores the original", func(t *testing.T) {
+		for name, command := range map[string]string{
+			"node":     manual,
+			"abs":      strings.Replace(manual, "node /somewhere/dist/cli.js", "/old/bin/agtop", 1),
+			"piped":    "/old/bin/agtop statusline-hook | bash ~/.claude/statusline.sh",
+			"abs-only": "/old/bin/agtop statusline-hook --print",
+		} {
+			t.Run(name, func(t *testing.T) {
+				p := profile(t, "claude")
+				text := `{"model":"opus","statusLine":{"type":"command","command":` + quote(command) + `,"padding":0},"z":1}`
+				write(t, settingsOf(p), text)
+				dry := run(t, []config.ProfileDir{p}, runOpts{Options: Options{DryRun: true}})
+				contains(t, "stdout", dry.stdout, "[claude] would update")
+				if read(t, p) != text {
+					t.Fatal("dry run wrote")
+				}
+				r := run(t, []config.ProfileDir{p}, yes())
+				contains(t, "stdout", r.stdout, "[claude] updated")
+				sl := statusLine(t, p)
+				if r.code != 0 || sl["padding"] != 0.0 || !strings.Contains(sl["command"].(string), hook) || strings.Contains(sl["command"].(string), "/old/bin") || strings.Contains(sl["command"].(string), "/somewhere") {
+					t.Fatalf("%+v %v", r, sl)
+				}
+				if len(backups(t, p)) != 1 {
+					t.Errorf("backups %v", backups(t, p))
+				}
+				again := run(t, []config.ProfileDir{p}, yes())
+				contains(t, "stdout", again.stdout, "[claude] already set up")
+				run(t, []config.ProfileDir{p}, runOpts{Options: Options{Remove: true, Yes: true}})
+				sl = statusLine(t, p)
+				if name == "abs-only" {
+					if _, has := sl["command"]; has || !strings.Contains(read(t, p), `"z"`) {
+						t.Errorf("not removed: %s", read(t, p))
+					}
+					return
+				}
+				if sl["command"] != "bash ~/.claude/statusline.sh" || sl["padding"] != 0.0 || exists(agtopOf(p)) {
+					t.Errorf("not restored: %s", read(t, p))
+				}
+			})
+		}
+	})
+
+	t.Run("a hooked statusLine in an unknown form is skipped, not touched", func(t *testing.T) {
+		p := profile(t, "claude")
+		text := `{"statusLine":{"command":"a; statusline-hook; b"}}`
+		write(t, settingsOf(p), text)
+		r := run(t, []config.ProfileDir{p}, yes())
+		contains(t, "stdout", r.stdout, "[claude] skipped (statusLine runs statusline-hook in a form agtop does not know")
+		if read(t, p) != text || len(backups(t, p)) != 0 {
+			t.Error("touched")
 		}
 	})
 

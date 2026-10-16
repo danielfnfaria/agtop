@@ -48,6 +48,8 @@ homebrew_casks:
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     commit_msg_template: "chore: agtop {{ .Tag }}"
+    caveats: |
+      Run `agtop setup` to show the 5h/7d plan usage.
     # The binaries are not signed: drop the quarantine attribute so macOS runs them.
     hooks:
       post:
