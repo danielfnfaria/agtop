@@ -15,6 +15,9 @@ type Provider struct {
 // ClaudeCode is the provider of the sessions and profiles agtop reads today.
 const ClaudeCode ProviderID = "claude-code"
 
+// Opencode is the provider of the sessions of opencode (https://opencode.ai).
+const Opencode ProviderID = "opencode"
+
 // Providers is the registry.
 var Providers = map[ProviderID]Provider{
 	ClaudeCode: {
@@ -22,6 +25,12 @@ var Providers = map[ProviderID]Provider{
 		DisplayName: "Claude Code",
 		Symbol:      "✳", // EIGHT SPOKED ASTERISK
 		Color:       "#D97757",
+	},
+	Opencode: {
+		ID:          Opencode,
+		DisplayName: "opencode",
+		Symbol:      "◆", // BLACK DIAMOND
+		Color:       "#4F8FF7",
 	},
 }
 

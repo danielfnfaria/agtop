@@ -65,7 +65,7 @@ func TestOSFSRealpath(t *testing.T) {
 		if a != b {
 			t.Errorf("%q != %q", a, b)
 		}
-		_, err := ResolveClaudeDirs(ResolveInput{
+		_, err := ResolveProfiles(ResolveInput{
 			Profiles: []ProfileDir{prof("a", filepath.Join(h, ".claude")), prof("b", filepath.Join(h, ".CLAUDE"))},
 			Env:      Env{}, Homedir: h, FS: OSFS{}, Cwd: h, ConfigPath: filepath.Join(h, "config.toml"),
 		})

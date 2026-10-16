@@ -49,3 +49,10 @@ func TestProviderInfoUnknown(t *testing.T) {
 		t.Errorf("color %q", p.Color)
 	}
 }
+
+func TestProviderOpencode(t *testing.T) {
+	want := Provider{ID: "opencode", DisplayName: "opencode", Symbol: "\u25c6", Color: "#4F8FF7"}
+	if got := ProviderInfo(Opencode); got != want {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+}

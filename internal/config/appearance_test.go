@@ -13,7 +13,7 @@ const testFile = "/home/u/.config/agtop/config.toml"
 
 func parseAppearanceText(t *testing.T, text string) *style.AppearanceConfig {
 	t.Helper()
-	d, err := ParseFile(text, testFile, "/home/u")
+	d, err := ParseFile(text, testFile, nil, "/home/u")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -23,7 +23,7 @@ func parseAppearanceText(t *testing.T, text string) *style.AppearanceConfig {
 // wantFails asserts that text is rejected with an *Error containing msg.
 func wantFails(t *testing.T, text, msg string) {
 	t.Helper()
-	_, err := ParseFile(text, testFile, "/home/u")
+	_, err := ParseFile(text, testFile, nil, "/home/u")
 	var ce *Error
 	if !errors.As(err, &ce) {
 		t.Fatalf("%q: want *Error, got %v", text, err)
@@ -168,7 +168,7 @@ func TestParseAppearanceErrors(t *testing.T) {
 }
 
 func TestUnknownKeyListsExpected(t *testing.T) {
-	_, err := ParseFile("[layout]\nx = 1", testFile, "/home/u")
+	_, err := ParseFile("[layout]\nx = 1", testFile, nil, "/home/u")
 	want := testFile + `: unknown key "x" in [layout] (expected top_bar, time, sparkline)`
 	if err == nil || err.Error() != want {
 		t.Errorf("got %v", err)

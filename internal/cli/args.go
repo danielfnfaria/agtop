@@ -148,7 +148,7 @@ func Resolve(argv []string, sys System) (Command, error) {
 		return Command{Mode: ModeInvalid}, nil
 	}
 	if f.config == nil && !fileLoaded {
-		config.InitConfigFile(sys.FS, configPath, profiles, sys.Homedir, sys.Stderr)
+		config.InitConfigFile(sys.FS, sys.Env, configPath, profiles, sys.Homedir, sys.Stderr)
 	}
 	cmd := Command{Profiles: profiles, Appearance: appearance, NoColor: sys.Env["NO_COLOR"] != ""}
 	switch {
@@ -208,7 +208,7 @@ func loadRunConfig(configFlag *string, sys System) (profiles []config.ProfileDir
 		configPath = config.DefaultConfigPath(sys.Env, sys.Homedir)
 	}
 	warnRemovedEnvs(configPath, sys)
-	profiles, err = config.ResolveClaudeDirs(config.ResolveInput{
+	profiles, err = config.ResolveProfiles(config.ResolveInput{
 		Profiles:   loaded.Profiles,
 		Env:        sys.Env,
 		Homedir:    sys.Homedir,
@@ -285,7 +285,7 @@ func warnRemovedEnvs(configPath string, sys System) {
 func validateProfiles(profiles []config.ProfileDir, sys System) bool {
 	ok := true
 	for _, p := range profiles {
-		res := config.ValidateClaudeDir(p.Dir, sys.FS)
+		res := config.ValidateProfile(p, sys.FS)
 		for _, w := range res.Warnings {
 			fmt.Fprintf(sys.Stderr, "agtop: warning [%s]: %s\n", p.Label, w)
 		}

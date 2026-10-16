@@ -21,6 +21,11 @@ Config file (TOML; optional unless given with --config). Only the tables
 [profiles] maps a label (shown in the viewer) to a Claude Code config
 directory, in the order of the file: an absolute path or starting with '~'
 (only expanded at the start). Two labels for the same directory are an error.
+An opencode profile is a table instead of a path; dir is optional (default
+$XDG_DATA_HOME/opencode, else ~/.local/share/opencode) and must hold opencode.db:
+  oc = { provider = "opencode" }
+  oc2 = { provider = "opencode", dir = "~/other/opencode" }
+opencode sessions are not read yet: such a profile is listed with an error.
 
 Appearance (all optional, independent of [profiles]; the defaults are today's
 look). Colors are chalk names (black, red, green, yellow, blue, magenta, cyan,

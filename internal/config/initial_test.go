@@ -64,7 +64,7 @@ func TestRenderInitialConfig(t *testing.T) {
 			prof("claude", home+"/.claude"),
 		} {
 			text := render(p, prof("claude-work", home+"/.claude-work"))
-			d, err := ParseFile(text, "c.toml", home)
+			d, err := ParseFile(text, "c.toml", nil, home)
 			if err != nil || !reflect.DeepEqual(d.Profiles, []ProfileDir{p}) {
 				t.Errorf("%+v: got %+v, %v\n%s", p, d.Profiles, err, text)
 			}
@@ -212,7 +212,7 @@ func TestCreateConfigFileIfMissing(t *testing.T) {
 func TestInitConfigFile(t *testing.T) {
 	run := func(fake *fakeFS, p ProfileDir) (string, string) {
 		var buf bytes.Buffer
-		InitConfigFile(fake, "/c/config.toml", []ProfileDir{p}, home, &buf)
+		InitConfigFile(fake, nil, "/c/config.toml", []ProfileDir{p}, home, &buf)
 		return buf.String(), fake.files["/c/config.toml"]
 	}
 	fake := func() *fakeFS {
@@ -252,6 +252,32 @@ func TestInitConfigFile(t *testing.T) {
 		msg, _ := run(f, prof("claude", home+"/.claude"))
 		if msg != "agtop: warning: could not create /c/config.toml: the path exists but is not a regular file\n" {
 			t.Errorf("msg %q", msg)
+		}
+	})
+
+	t.Run("suggests an opencode profile when its database exists", func(t *testing.T) {
+		f := fake()
+		f.files[home+"/.local/share/opencode/opencode.db"] = ""
+		_, text := run(f, prof("claude", home+"/.claude"))
+		if !strings.Contains(text, "# oc = { provider = \"opencode\" }\n") {
+			t.Errorf("no opencode hint in\n%s", text)
+		}
+		if _, err := ParseFile(text, "c.toml", nil, home); err != nil {
+			t.Errorf("the generated file does not parse: %v", err)
+		}
+	})
+
+	t.Run("the opencode hint follows XDG_DATA_HOME and needs the database", func(t *testing.T) {
+		f := fake()
+		f.files["/xdg/opencode/opencode.db"] = ""
+		var buf bytes.Buffer
+		InitConfigFile(f, Env{EnvXDGDataHome: "/xdg"}, "/c/config.toml", []ProfileDir{prof("claude", home+"/.claude")}, home, &buf)
+		if !strings.Contains(f.files["/c/config.toml"], "# oc = ") {
+			t.Error("no hint with XDG_DATA_HOME")
+		}
+		_, text := run(fake(), prof("claude", home+"/.claude"))
+		if strings.Contains(text, "opencode") {
+			t.Errorf("hint without a database:\n%s", text)
 		}
 	})
 }

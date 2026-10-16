@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/danielfnfaria/agtop/internal/config"
+	"github.com/danielfnfaria/agtop/internal/domain"
 )
 
 var testNow = time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC)
@@ -546,4 +547,14 @@ func TestResolveHook(t *testing.T) {
 			t.Errorf("got %q", got.Command)
 		}
 	})
+}
+
+func TestSetupSkipsOpencodeProfiles(t *testing.T) {
+	p := profile(t, "oc")
+	p.Provider = domain.Opencode
+	r := run(t, []config.ProfileDir{p}, yes())
+	if _, err := os.Stat(settingsOf(p)); err == nil {
+		t.Error("settings.json written to an opencode profile")
+	}
+	contains(t, "stdout", r.stdout, "[oc] skipped", "not a Claude Code profile")
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/danielfnfaria/agtop/internal/cli/setup"
 	"github.com/danielfnfaria/agtop/internal/config"
+	"github.com/danielfnfaria/agtop/internal/domain"
 )
 
 func resolve(t *testing.T, argv []string, home string, mut func(*System)) (Command, string, error) {
@@ -250,3 +251,31 @@ func TestMainExitCodes(t *testing.T) {
 }
 
 func regexpMatch(re, s string) bool { return regexp.MustCompile(re).MatchString(s) }
+
+func TestResolveValidatesByProvider(t *testing.T) {
+	home := mkHome(t)
+	mustMkdir(t, filepath.Join(home, ".claude", "projects"))
+	mustMkdir(t, filepath.Join(home, ".claude", "sessions"))
+	oc := filepath.Join(home, "oc")
+	mustMkdir(t, oc)
+	writeConfig(t, home, "[profiles]\nc = \"~/.claude\"\noc = { provider = \"opencode\", dir = \"~/oc\" }\n", "")
+
+	cmd, stderr, err := resolve(t, nil, home, nil)
+	if err != nil || cmd.Mode != ModeInvalid || !strings.Contains(stderr, "agtop: error [oc]: "+oc+" does not look like an opencode data directory: missing opencode.db") {
+		t.Errorf("%+v, %q, %v", cmd.Mode, stderr, err)
+	}
+	if strings.Contains(stderr, "[c]") {
+		t.Errorf("the Claude profile was reported: %q", stderr)
+	}
+
+	if err := os.WriteFile(filepath.Join(oc, "opencode.db"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd, stderr, err = resolve(t, nil, home, nil)
+	if err != nil || cmd.Mode == ModeInvalid || stderr != "" {
+		t.Errorf("%+v, %q, %v", cmd.Mode, stderr, err)
+	}
+	if len(cmd.Profiles) != 2 || cmd.Profiles[1].Provider != domain.Opencode {
+		t.Errorf("profiles %+v", cmd.Profiles)
+	}
+}
