@@ -166,6 +166,7 @@ are marked with `~` (estimated). Without `agtop setup`, only 3, 4 and this estim
 | --- | --- |
 | ←↑→↓ / hjkl | select a session (in the detail view, an agent); nothing is selected at start |
 | Enter | open the selected session; in the detail view, expand the agent |
+| x | close the selected session in the tree (SIGTERM, after a confirmation) |
 | Tab | switch the detail panel (agents / pending tools) |
 | Esc / Backspace | back to the tree; in the tree, clear the selection |
 | p | filter by profile (only with two or more profiles) |

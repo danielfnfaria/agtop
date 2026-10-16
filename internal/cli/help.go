@@ -108,6 +108,7 @@ hidden before the tree loses room.
 Keys:
   arrows / h j k l  move between sessions (in the detail, between agents)
   Enter             open the session (in the detail, expand the agent)
+  x                 close the selected session in the tree (SIGTERM, after a confirmation)
   Esc / Backspace   back to the tree (or close the help); in the tree, clear
                     the selection
   Tab               switch the detail panel (agents / pending tools)

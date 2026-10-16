@@ -12,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/term"
 
+	"github.com/danielfnfaria/agtop/internal/closer"
 	"github.com/danielfnfaria/agtop/internal/config"
 	"github.com/danielfnfaria/agtop/internal/store"
 	"github.com/danielfnfaria/agtop/internal/ui/style"
@@ -27,6 +28,8 @@ type Options struct {
 	Links bool
 	// Store is the snapshot source; Run creates a store over Profiles when nil.
 	Store Source
+	// Closer closes a session (validates and sends SIGTERM); Run creates a real one when nil.
+	Closer Closer
 	// Now is the clock in epoch ms (tests); default time.Now.
 	Now func() int64
 	// NoticeMS is how long a notice stays; default 4000.
@@ -99,6 +102,9 @@ func Run(ctx context.Context, o Options) (exitCode int, err error) {
 		deps.Log = held.heldOutput
 		st = store.New(store.DefaultOptions(o.Profiles), deps)
 		o.Store = st
+	}
+	if o.Closer == nil {
+		o.Closer = closer.New(closer.NewDeps())
 	}
 	done := make(chan struct{})
 	o.done = done

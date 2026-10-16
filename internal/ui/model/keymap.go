@@ -9,6 +9,8 @@ const (
 	// CommandRedraw repaints the whole screen.
 	CommandRedraw
 	CommandQuit
+	// CommandClose asks to close the selected session (handled by the app).
+	CommandClose
 )
 
 // Command is what a key does: a navigation action, or one handled by the app itself.
@@ -47,6 +49,8 @@ func KeyToCommand(key string) (cmd Command, ok bool) {
 		return nav(ActionToggleHelp, "")
 	case "p":
 		return nav(ActionCycleProfile, "")
+	case "x":
+		return Command{Kind: CommandClose}, true
 	}
 	return Command{}, false
 }

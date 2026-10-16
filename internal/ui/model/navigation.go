@@ -27,6 +27,18 @@ const (
 // SessionGoneNotice is the notice when the open session left the list.
 const SessionGoneNotice = "the open session left the list; back to the tree"
 
+// ClosePrompt is the frozen identity of the session awaiting a close confirmation: the values the
+// user saw and confirmed. A zero Key means no confirmation is pending. The prompt freezes these so
+// that a session changing under the cursor (title, pid, …) cannot slip through the confirmation.
+type ClosePrompt struct {
+	Key       string
+	Profile   string
+	PID       int
+	SessionID string
+	StartedAt int64
+	Title     string
+}
+
 // NavState is the navigation state. Empty strings mean "none" (keys are never empty). It is
 // comparable, so an unchanged state is == to the previous one.
 type NavState struct {
@@ -49,6 +61,8 @@ type NavState struct {
 	Help          bool
 	// Notice is a short message (e.g. the open session went away).
 	Notice string
+	// Close is the session awaiting a close confirmation (zero when none).
+	Close ClosePrompt
 }
 
 // InitialNav is the state at startup: the tree, nothing selected.
@@ -120,6 +134,11 @@ func SyncNav(s NavState, ctx NavContext) NavState {
 		s.SelectedIndex = idx
 	} else {
 		s.SelectedKey, s.SelectedIndex = "", 0
+	}
+
+	// A session awaiting a close confirmation that left the list drops the confirmation.
+	if s.Close.Key != "" && !slices.Contains(ctx.Keys, s.Close.Key) {
+		s.Close = ClosePrompt{}
 	}
 
 	if s.View == ViewDetail {

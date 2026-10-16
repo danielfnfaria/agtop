@@ -19,6 +19,7 @@ const (
 var helpKeys = [][2]string{
 	{"arrows / h j k l", "move between sessions (tree) or agents (detail)"},
 	{"Enter", "open the session; in the detail, expand the agent"},
+	{"x", "close the selected session in the tree (SIGTERM, after a confirmation)"},
 	{"Esc / Backspace", "back to the tree (or close this help)"},
 	{"Tab", "switch the detail panel (agents / pending tools)"},
 	{profileKey, "filter by profile (all, then each label)"},
