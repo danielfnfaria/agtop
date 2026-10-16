@@ -6,13 +6,14 @@ import (
 	"github.com/danielfnfaria/agtop/internal/domain"
 	"github.com/danielfnfaria/agtop/internal/domain/reduce"
 	"github.com/danielfnfaria/agtop/internal/ingest/watcher"
+	"github.com/danielfnfaria/agtop/internal/source"
 )
 
 type agentEntry struct {
 	agentID        string
 	transcriptPath string
 	metaPath       string
-	tailer         Tailer
+	tailer         source.TranscriptReader
 	// metaLoaded: the meta.json was already read once.
 	metaLoaded bool
 	// metaSig is the "size:mtimeMs" of the meta.json at the last read: a scan re-reads it when it
@@ -39,7 +40,7 @@ type sessionEntry struct {
 	subagentsDir   string
 	// subagentNames caches name to validated path in subagents/ (see ListSubagents).
 	subagentNames map[string]string
-	main          Tailer
+	main          source.TranscriptReader
 	agents        map[string]*agentEntry
 	// agentOrder is the insertion order of agents.
 	agentOrder   []string

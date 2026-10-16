@@ -6,6 +6,7 @@ import (
 
 	"github.com/danielfnfaria/agtop/internal/domain"
 	"github.com/danielfnfaria/agtop/internal/domain/reduce"
+	"github.com/danielfnfaria/agtop/internal/source"
 )
 
 // Reading of a session: tailers of the main transcript and of the agents, meta.json, the file
@@ -42,12 +43,17 @@ func (s *Store) setSubagentsDir(e *sessionEntry, dir string) {
 	}
 }
 
-// newTailer is a new tailer, or nil once the store stopped or the session left.
-func (s *Store) newTailer(e *sessionEntry, p string) (Tailer, error) {
+// openTranscript is a new reader of the transcript, or nil once the store stopped or the session
+// left.
+func (s *Store) openTranscript(e *sessionEntry, ref string) (source.TranscriptReader, error) {
 	if s.isStopped() || e.removed {
 		return nil, nil
 	}
-	t, err := s.deps.NewTailer(p)
+	src := s.sourceOf(e.provider)
+	if src == nil {
+		return nil, nil
+	}
+	t, err := src.OpenTranscript(ref)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +104,7 @@ func (s *Store) rebuild(e *sessionEntry) error {
 	s.setSubagentsDir(e, files.SubagentsDir)
 	s.syncSessionWatcher(e)
 	if e.transcriptPath != "" {
-		t, err := s.newTailer(e, e.transcriptPath)
+		t, err := s.openTranscript(e, e.transcriptPath)
 		if err != nil {
 			return err
 		}
@@ -154,14 +160,6 @@ func (s *Store) rewatchIfShort(e *sessionEntry) {
 	}
 }
 
-func (s *Store) parseLines(lines []string) []domain.TranscriptEvent {
-	var events []domain.TranscriptEvent
-	for _, l := range lines {
-		events = append(events, s.source.ParseLine(l)...)
-	}
-	return events
-}
-
 // readMain reads what the main transcript grew; false if the session was rebuilt meanwhile
 // (the caller must stop).
 func (s *Store) readMain(e *sessionEntry) (bool, error) {
@@ -180,13 +178,13 @@ func (s *Store) readMain(e *sessionEntry) (bool, error) {
 	if res.Reset {
 		return false, s.afterReset(e)
 	}
-	if res.DroppedOversizedLines > 0 {
-		s.pushError("oversized line dropped: " + file)
+	for _, w := range res.Warnings {
+		s.pushError(w)
 	}
-	if len(res.Lines) == 0 {
+	if len(res.Events) == 0 {
 		return true, nil
 	}
-	e.setState(reduce.ReduceSessionEvents(e.state, s.parseLines(res.Lines)))
+	e.setState(reduce.ReduceSessionEvents(e.state, res.Events))
 	s.changed()
 	return true, nil
 }
@@ -208,13 +206,13 @@ func (s *Store) readAgent(e *sessionEntry, a *agentEntry) (bool, error) {
 	if res.Reset {
 		return false, s.afterReset(e)
 	}
-	if res.DroppedOversizedLines > 0 {
-		s.pushError("oversized line dropped: " + file)
+	for _, w := range res.Warnings {
+		s.pushError(w)
 	}
-	if len(res.Lines) == 0 {
+	if len(res.Events) == 0 {
 		return true, nil
 	}
-	e.setState(reduce.ReduceSessionAgentEvents(e.state, a.agentID, s.parseLines(res.Lines)))
+	e.setState(reduce.ReduceSessionAgentEvents(e.state, a.agentID, res.Events))
 	s.changed()
 	return true, nil
 }
@@ -227,10 +225,10 @@ func (s *Store) loadMeta(e *sessionEntry, a *agentEntry, sig string, hasSig bool
 	}
 	a.metaLoaded = true
 	if !hasSig {
-		sig, _ = s.source.FileSignature(file)
+		sig, _ = s.sourceOf(e.provider).FileSignature(file)
 	}
 	a.metaSig = sig
-	res := s.source.ReadAgentMeta(file)
+	res := s.sourceOf(e.provider).ReadAgentMeta(file)
 	if !res.OK {
 		s.pushError("meta " + file + ": " + res.Code)
 		return
@@ -256,7 +254,7 @@ func (s *Store) syncAgents(e *sessionEntry) error {
 	if dir == "" || s.isStopped() {
 		return nil
 	}
-	files := s.source.ListAgents(dir, e.subagentNames)
+	files := s.sourceOf(e.provider).ListAgents(dir, e.subagentNames)
 	if s.isStopped() || e.removed || e.subagentsDir != dir {
 		return nil
 	}
@@ -274,7 +272,7 @@ func (s *Store) syncAgents(e *sessionEntry) error {
 				// The agent transcript moved: what was reduced no longer holds.
 				return s.rebuild(e)
 			}
-			t, err := s.newTailer(e, f.TranscriptPath)
+			t, err := s.openTranscript(e, f.TranscriptPath)
 			if err != nil {
 				return err
 			}
@@ -294,7 +292,7 @@ func (s *Store) syncAgents(e *sessionEntry) error {
 			s.fileIndex[f.MetaPath] = fileRef{entry: e, kind: fileMeta, agentID: f.AgentID}
 			s.loadMeta(e, a, "", false)
 		} else if !agentIsFinal(e, a) {
-			if sig, ok := s.source.FileSignature(f.MetaPath); ok && sig != a.metaSig && e.agents[f.AgentID] == a {
+			if sig, ok := s.sourceOf(e.provider).FileSignature(f.MetaPath); ok && sig != a.metaSig && e.agents[f.AgentID] == a {
 				s.loadMeta(e, a, sig, true)
 			}
 		}

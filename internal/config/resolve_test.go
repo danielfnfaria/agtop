@@ -77,17 +77,17 @@ func TestResolveFallback(t *testing.T) {
 		want ProfileDir
 	}{
 		{"CLAUDE_CONFIG_DIR beats ~/.claude", []string{"/home/u/.claude/projects", "/ccd/.claude-c/projects"},
-			Env{"CLAUDE_CONFIG_DIR": "/ccd/.claude-c"}, ProfileDir{"claude-c", "/ccd/.claude-c", SourceClaudeConfigDir}},
+			Env{"CLAUDE_CONFIG_DIR": "/ccd/.claude-c"}, ProfileDir{"claude-c", "/ccd/.claude-c", SourceClaudeConfigDir, ""}},
 		{"nothing set: only ~/.claude, no search", []string{"/home/u/.claude/projects", "/home/u/.claude-x/projects"},
-			Env{}, ProfileDir{"claude", "/home/u/.claude", SourceDefault}},
+			Env{}, ProfileDir{"claude", "/home/u/.claude", SourceDefault, ""}},
 		{"empty CLAUDE_CONFIG_DIR falls back", []string{"/home/u/.claude/projects"},
-			Env{"CLAUDE_CONFIG_DIR": ""}, ProfileDir{"claude", "/home/u/.claude", SourceDefault}},
+			Env{"CLAUDE_CONFIG_DIR": ""}, ProfileDir{"claude", "/home/u/.claude", SourceDefault, ""}},
 		{"relative CLAUDE_CONFIG_DIR is relative to the cwd", []string{"/work/cc/projects"},
-			Env{"CLAUDE_CONFIG_DIR": "cc"}, ProfileDir{"cc", "/work/cc", SourceClaudeConfigDir}},
+			Env{"CLAUDE_CONFIG_DIR": "cc"}, ProfileDir{"cc", "/work/cc", SourceClaudeConfigDir, ""}},
 		{"~ expands in CLAUDE_CONFIG_DIR", []string{"/home/u/projects"},
-			Env{"CLAUDE_CONFIG_DIR": "~"}, ProfileDir{"u", "/home/u", SourceClaudeConfigDir}},
+			Env{"CLAUDE_CONFIG_DIR": "~"}, ProfileDir{"u", "/home/u", SourceClaudeConfigDir, ""}},
 		{"~/.claude without projects/ stays (validation reports it)", []string{"/home/u/.claude/algo"},
-			Env{}, ProfileDir{"claude", "/home/u/.claude", SourceDefault}},
+			Env{}, ProfileDir{"claude", "/home/u/.claude", SourceDefault, ""}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

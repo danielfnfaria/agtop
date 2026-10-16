@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+
+	"github.com/danielfnfaria/agtop/internal/domain"
 )
 
 // ProfileSource says where a profile directory came from.
@@ -22,6 +24,8 @@ type ProfileDir struct {
 	// Dir is the absolute path, with ~ already expanded.
 	Dir    string
 	Source ProfileSource
+	// Provider is the provider whose sessions live in the directory; empty means Claude Code.
+	Provider domain.ProviderID
 }
 
 // FS is the subset of filesystem operations the config layer uses, injectable for tests.

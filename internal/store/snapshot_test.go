@@ -92,7 +92,7 @@ func TestCompareEntries(t *testing.T) {
 
 func TestProfileStatuses(t *testing.T) {
 	t.Run("one status per profile, in order, with zeros before any discovery", func(t *testing.T) {
-		got := profileStatuses([]config.ProfileDir{profile1, profile2}, domain.ClaudeCode, nil, nil)
+		got := profileStatuses([]config.ProfileDir{profile1, profile2}, nil, nil)
 		if len(got) != 2 || got[0].Label != "p1" || got[0].LiveCount != 0 || got[1].Label != "p2" || got[1].LiveCount != 0 {
 			t.Errorf("got %+v", got)
 		}
@@ -107,7 +107,7 @@ func TestProfileStatuses(t *testing.T) {
 				{File: "3.json", Reason: discovery.IssueTooLarge},
 			}},
 		}}}
-		got := profileStatuses([]config.ProfileDir{profile1, profile2}, domain.ClaudeCode, result, nil)
+		got := profileStatuses([]config.ProfileDir{profile1, profile2}, result, nil)
 		p1, p2 := got[0], got[1]
 		wantIssues := map[discovery.IssueReason]int{discovery.IssueInvalidJSON: 2, discovery.IssueTooLarge: 1}
 		if p1.LiveCount != 2 || p1.SkippedEntries != 3 || !maps.Equal(p1.Issues, wantIssues) {
@@ -323,8 +323,8 @@ func TestBuildSnapshot(t *testing.T) {
 		small := withState(testEntry("small", 0, profile1, func(d *discovery.DiscoveredSession) { d.StartedAt = 1 }), opus(100_000))
 		errs := []string{"read /x: ENOENT"}
 		snap := buildSnapshot(snapshotInput{
-			profiles: []config.ProfileDir{profile1}, provider: domain.ClaudeCode,
-			entries: []*sessionEntry{big, small}, errors: errs, retired: map[string]retiredActivity{},
+			profiles: []config.ProfileDir{profile1},
+			entries:  []*sessionEntry{big, small}, errors: errs, retired: map[string]retiredActivity{},
 			now: testNow, learner: l,
 		})
 		if snap.Sessions[0].SessionID != "small" || snap.Sessions[1].SessionID != "big" {
