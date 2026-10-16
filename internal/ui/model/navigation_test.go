@@ -151,6 +151,16 @@ func TestSyncNav(t *testing.T) {
 			t.Errorf("filter = %q", got.ProfileFilter)
 		}
 	})
+	t.Run("a pending close confirmation clears when the session leaves", func(t *testing.T) {
+		s := selectedA
+		s.Close = ClosePrompt{Key: "a"}
+		if got := SyncNav(s, navCtx(withKeys("b", "c"))); got.Close.Key != "" {
+			t.Errorf("close key = %q", got.Close.Key)
+		}
+		if got := SyncNav(s, navCtx(withKeys("a"))); got.Close.Key != "a" {
+			t.Errorf("close key = %q", got.Close.Key)
+		}
+	})
 }
 
 func TestNavigateTree(t *testing.T) {
@@ -435,8 +445,8 @@ func TestKeyToCommand(t *testing.T) {
 		{"tab", navCmd(tab), true}, {"shift+tab", navCmd(tab), true},
 		{"?", navCmd(help), true},
 		{"p", navCmd(cycle), true},
-		{"ctrl+k", Command{}, false}, {"alt+q", Command{}, false}, {"x", Command{}, false},
-		{"", Command{}, false},
+		{"x", Command{Kind: CommandClose}, true},
+		{"ctrl+k", Command{}, false}, {"alt+q", Command{}, false}, {"", Command{}, false},
 	}
 	for _, tt := range tests {
 		got, ok := KeyToCommand(tt.key)

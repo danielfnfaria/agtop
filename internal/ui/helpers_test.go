@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/danielfnfaria/agtop/internal/closer"
 	"github.com/danielfnfaria/agtop/internal/config"
 	"github.com/danielfnfaria/agtop/internal/discovery"
 	"github.com/danielfnfaria/agtop/internal/domain"
@@ -170,6 +171,17 @@ func testOptions(st Source, profs []config.ProfileDir) Options {
 		Profiles: profs, Appearance: style.DefaultAppearance(), Store: st,
 		Now: func() int64 { return now }, Location: time.UTC,
 	}
+}
+
+// fakeCloser records the cards it closes and returns a canned error. It never signals.
+type fakeCloser struct {
+	called []closer.Card
+	err    error
+}
+
+func (f *fakeCloser) Close(card closer.Card) error {
+	f.called = append(f.called, card)
+	return f.err
 }
 
 // key builds a key press as the terminal sends it.

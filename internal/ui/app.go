@@ -1,12 +1,15 @@
 package ui
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/danielfnfaria/agtop/internal/closer"
 	"github.com/danielfnfaria/agtop/internal/config"
 	"github.com/danielfnfaria/agtop/internal/domain"
 	"github.com/danielfnfaria/agtop/internal/store"
@@ -19,6 +22,11 @@ import (
 type Source interface {
 	Snapshot() *store.Snapshot
 	Updates() <-chan struct{}
+}
+
+// Closer closes a session after validating its record and process (see internal/closer).
+type Closer interface {
+	Close(card closer.Card) error
 }
 
 const (
@@ -46,6 +54,7 @@ type App struct {
 	appearance style.Appearance
 	render     renderer
 	source     Source
+	closer     Closer
 	done       <-chan struct{}
 	nowFn      func() int64
 	loc        *time.Location
@@ -85,6 +94,7 @@ func newApp(o Options, width, height int) *App {
 		appearance: o.Appearance,
 		render:     renderer{style: o.Style, links: o.Links},
 		source:     o.Store,
+		closer:     o.Closer,
 		done:       o.done,
 		nowFn:      now,
 		loc:        o.Location,
@@ -161,6 +171,21 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key == "ctrl+z" {
 			return a, tea.Suspend
 		}
+		if a.nav.Close.Key != "" {
+			// A close confirmation is pending: only its own keys act.
+			switch key {
+			case "y", "enter":
+				a.confirmClose()
+			case "esc", "n":
+				a.cancelClose()
+			case "q", "ctrl+c":
+				return a, tea.Quit
+			default:
+				return a, nil
+			}
+			cmds = append(cmds, a.settle()...)
+			return a, tea.Batch(cmds...)
+		}
 		cmd, ok := model.KeyToCommand(key)
 		if !ok {
 			return a, nil
@@ -172,6 +197,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, tea.ClearScreen
 		case model.CommandNav:
 			a.nav = model.Navigate(a.nav, cmd.Nav, a.tree().ctx)
+		case model.CommandClose:
+			a.requestClose()
 		}
 	}
 	cmds = append(cmds, a.settle()...)
@@ -182,11 +209,117 @@ func (a *App) tree() treeModel {
 	return buildTreeModel(a.snap, a.profiles, a.nav, a.width, a.appearance.Glyphs.Line)
 }
 
+// requestClose enters the close confirmation for the selected session, freezing its identity so a
+// session changing under the cursor cannot slip through the confirmation.
+func (a *App) requestClose() {
+	if a.nav.Help || a.nav.View != model.ViewTree || a.nav.SelectedKey == "" {
+		return
+	}
+	if a.width < model.MinTermColumns || a.height < model.MinTermRows {
+		return
+	}
+	s := a.tree().find(a.nav.SelectedKey)
+	if s == nil {
+		return
+	}
+	a.nav.Close = model.ClosePrompt{
+		Key:       s.Key,
+		Profile:   s.ProfileLabel,
+		PID:       s.PID,
+		SessionID: s.SessionID,
+		StartedAt: s.StartedAt,
+		Title:     s.DisplayTitle,
+	}
+	a.nav.Notice = ""
+}
+
+// cancelClose leaves the confirmation without closing.
+func (a *App) cancelClose() {
+	a.nav.Close = model.ClosePrompt{}
+	a.nav.Notice = ""
+}
+
+// confirmClose validates and closes the frozen session, reporting the result in the notice. The
+// closer re-validates the record and the live process before signaling, so the frozen card here is
+// a first line of defence, not the last.
+func (a *App) confirmClose() {
+	p := a.nav.Close
+	a.nav.Close = model.ClosePrompt{}
+	if p.Key == "" {
+		return
+	}
+	if a.width < model.MinTermColumns || a.height < model.MinTermRows {
+		a.nav.Notice = "cannot close \"" + p.Title + "\": terminal too small"
+		return
+	}
+	if a.closer == nil {
+		a.nav.Notice = "cannot close \"" + p.Title + "\": close is not available"
+		return
+	}
+	card, ok := a.closeCard(p)
+	if !ok {
+		a.nav.Notice = "cannot close \"" + p.Title + "\": profile not found"
+		return
+	}
+	if err := a.closer.Close(card); err != nil {
+		a.nav.Notice = "cannot close \"" + p.Title + "\": " + err.Error()
+		return
+	}
+	a.nav.Notice = "sent SIGTERM to \"" + p.Title + "\" (pid " + strconv.Itoa(p.PID) + ")"
+}
+
+// closeCard maps the frozen prompt to the card the closer reads, resolving the profile dir.
+func (a *App) closeCard(p model.ClosePrompt) (closer.Card, bool) {
+	for _, pr := range a.profiles {
+		if pr.Label == p.Profile {
+			return closer.Card{
+				ProfileDir: pr.Dir,
+				PID:        p.PID,
+				SessionID:  p.SessionID,
+				StartedAt:  p.StartedAt,
+			}, true
+		}
+	}
+	return closer.Card{}, false
+}
+
+// confirmPrompt is the confirmation text of the pending close, from the frozen identity, or "".
+func (a *App) confirmPrompt() string {
+	if a.nav.Close.Key == "" {
+		return ""
+	}
+	return fmt.Sprintf("close %q (pid %d)? y/Enter confirm, Esc/n cancel", a.nav.Close.Title, a.nav.Close.PID)
+}
+
+// recheckClose cancels a pending close confirmation when the session it froze no longer matches
+// the cursor (title, pid, …) or the terminal shrank below the minimum. A confirmation must never
+// act on a session the user did not see; this is re-run on every settle (after each snapshot).
+func (a *App) recheckClose() {
+	if a.nav.Close.Key == "" {
+		return
+	}
+	if a.width < model.MinTermColumns || a.height < model.MinTermRows {
+		a.nav.Close = model.ClosePrompt{}
+		return
+	}
+	s := a.tree().find(a.nav.Close.Key)
+	if s == nil ||
+		s.ProfileLabel != a.nav.Close.Profile ||
+		s.PID != a.nav.Close.PID ||
+		s.SessionID != a.nav.Close.SessionID ||
+		s.StartedAt != a.nav.Close.StartedAt ||
+		s.DisplayTitle != a.nav.Close.Title {
+		a.nav.Close = model.ClosePrompt{}
+		a.nav.Notice = "the session changed; close canceled"
+	}
+}
+
 // settle fits the navigation to the snapshot, records the scroll of this frame and (re)arms the
 // notice and spinner timers.
 func (a *App) settle() []tea.Cmd {
 	var cmds []tea.Cmd
 	a.nav = model.SyncNav(a.nav, a.tree().ctx)
+	a.recheckClose()
 	f := a.compose()
 	if f.treeShown {
 		a.treeTop = f.viewport.Top
@@ -275,7 +408,7 @@ func (a *App) compose() frame {
 	}
 	f.bodyRows = belowTop - topRows
 	notice := 0
-	if a.nav.Notice != "" {
+	if a.nav.Notice != "" || a.nav.Close.Key != "" {
 		notice = 1
 	}
 	f.innerRows = max(1, f.bodyRows-notice)
@@ -351,7 +484,10 @@ func (a *App) Render() string {
 	}
 	bodyEnd := y + f.bodyRows
 	c.clip(y, bodyEnd)
-	if a.nav.Notice != "" {
+	if prompt := a.confirmPrompt(); prompt != "" {
+		c.line(0, y, a.width, g.Ellipsis, fg(prompt, t.Warn))
+		y++
+	} else if a.nav.Notice != "" {
 		c.line(0, y, a.width, g.Ellipsis, fg(a.nav.Notice, t.Warn))
 		y++
 	}
