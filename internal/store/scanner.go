@@ -51,7 +51,26 @@ func (s *Store) discover() (discovery.Result, error) {
 		}
 		out.Profiles = append(out.Profiles, res.Profiles...)
 	}
+	s.reportUnsupported()
+	if out.ScannedAt == 0 {
+		// No profile was scanned (all of them lack a source): the scan still happened.
+		out.ScannedAt = s.deps.Clock.Now()
+	}
 	return out, nil
+}
+
+// reportUnsupported pushes one error, the first time, naming the profiles whose provider has no
+// source: they are never scanned.
+func (s *Store) reportUnsupported() {
+	if s.unsupportedReported {
+		return
+	}
+	s.unsupportedReported = true
+	for _, p := range s.opts.Profiles {
+		if s.sourceOf(profileProvider(p)) == nil {
+			s.pushError("profile " + p.Label + ": " + domain.ProviderInfo(profileProvider(p)).DisplayName + " support is not available yet")
+		}
+	}
 }
 
 func (s *Store) scanOnce() {

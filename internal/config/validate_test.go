@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/danielfnfaria/agtop/internal/domain"
 )
 
 func TestValidateClaudeDir(t *testing.T) {
@@ -53,5 +55,44 @@ func mustMkdir(t *testing.T, p string) {
 	t.Helper()
 	if err := os.MkdirAll(p, 0o755); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestValidateOpencodeDir(t *testing.T) {
+	t.Run("ok with opencode.db", func(t *testing.T) {
+		r := ValidateOpencodeDir("/oc", newFakeFS([]string{"/oc"}, nil, map[string]string{"/oc/opencode.db": ""}))
+		if r.Error != "" || len(r.Warnings) != 0 {
+			t.Errorf("got %+v", r)
+		}
+	})
+	t.Run("error without opencode.db", func(t *testing.T) {
+		r := ValidateOpencodeDir("/oc", newFakeFS([]string{"/oc"}, nil, nil))
+		if r.Error != "/oc does not look like an opencode data directory: missing opencode.db" {
+			t.Errorf("got %q", r.Error)
+		}
+	})
+	t.Run("a directory named opencode.db is not the database", func(t *testing.T) {
+		if r := ValidateOpencodeDir("/oc", newFakeFS([]string{"/oc/opencode.db"}, nil, nil)); r.Error == "" {
+			t.Error("accepted")
+		}
+	})
+	t.Run("error when the directory does not exist", func(t *testing.T) {
+		r := ValidateOpencodeDir("/nope", newFakeFS(nil, nil, nil))
+		if r.Error != "/nope does not exist or is not a directory" {
+			t.Errorf("got %q", r.Error)
+		}
+	})
+}
+
+func TestValidateProfileByProvider(t *testing.T) {
+	fake := newFakeFS([]string{"/c/projects", "/oc"}, nil, map[string]string{"/oc/opencode.db": ""})
+	if r := ValidateProfile(ProfileDir{Dir: "/c"}, fake); r.Error != "" {
+		t.Errorf("claude: %q", r.Error)
+	}
+	if r := ValidateProfile(ProfileDir{Dir: "/oc", Provider: domain.Opencode}, fake); r.Error != "" {
+		t.Errorf("opencode: %q", r.Error)
+	}
+	if r := ValidateProfile(ProfileDir{Dir: "/c", Provider: domain.Opencode}, fake); r.Error == "" {
+		t.Error("a claude dir passed as opencode")
 	}
 }

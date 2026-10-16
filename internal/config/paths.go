@@ -8,8 +8,22 @@ import (
 const (
 	// EnvXDGConfigHome and EnvClaudeConfigDir are the environment variables the config reads.
 	EnvXDGConfigHome   = "XDG_CONFIG_HOME"
+	EnvXDGDataHome     = "XDG_DATA_HOME"
 	EnvClaudeConfigDir = "CLAUDE_CONFIG_DIR"
 )
+
+// OpencodeDBName is the opencode database inside its data directory.
+const OpencodeDBName = "opencode.db"
+
+// DefaultOpencodeDir is $XDG_DATA_HOME/opencode, else <homedir>/.local/share/opencode. A
+// relative XDG_DATA_HOME is invalid per the spec and ignored.
+func DefaultOpencodeDir(env Env, homedir string) string {
+	base := filepath.Join(homedir, ".local", "share")
+	if xdg := strings.TrimSpace(env[EnvXDGDataHome]); xdg != "" && filepath.IsAbs(xdg) {
+		base = xdg
+	}
+	return filepath.Join(base, "opencode")
+}
 
 // DefaultConfigPath is $XDG_CONFIG_HOME/agtop/config.toml, else <homedir>/.config/agtop/config.toml
 // (also on macOS). A relative XDG_CONFIG_HOME is invalid per the spec and ignored.

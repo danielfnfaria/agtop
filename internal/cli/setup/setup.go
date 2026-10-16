@@ -203,6 +203,10 @@ func errText(err error) string {
 // inspect reads one profile and works out what to do (nothing is written here).
 func inspect(profile config.ProfileDir, remove bool, io IO) *work {
 	w := &work{profile: profile, settingsFile: filepath.Join(profile.Dir, SettingsFileName), status: statusSkipped}
+	if profile.Provider != "" && profile.Provider != domain.ClaudeCode {
+		w.note = domain.ProviderInfo(profile.Provider).DisplayName + " has no status line to wire; not a Claude Code profile"
+		return w
+	}
 	if !isDirectory(profile.Dir) {
 		w.note = profile.Dir + " is not a directory"
 		return w

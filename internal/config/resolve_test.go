@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/danielfnfaria/agtop/internal/domain"
 )
 
 const configPath = "/home/u/.config/agtop/config.toml"
@@ -14,7 +16,7 @@ func resolve(fsys FS, mutate func(*ResolveInput)) ([]ProfileDir, error) {
 	if mutate != nil {
 		mutate(&in)
 	}
-	return ResolveClaudeDirs(in)
+	return ResolveProfiles(in)
 }
 
 func prof(label, dir string) ProfileDir {
@@ -126,4 +128,24 @@ func TestExpandHome(t *testing.T) {
 			t.Errorf("ExpandHome(%q) = %q, want %q", tt.in, got, tt.want)
 		}
 	}
+}
+
+func TestResolveMixedProviders(t *testing.T) {
+	fake := newFakeFS([]string{"/same/projects", "/home/u/.claude/projects"}, nil, nil)
+	oc := func(label, dir string) ProfileDir {
+		return ProfileDir{Label: label, Dir: dir, Source: SourceConfig, Provider: domain.Opencode}
+	}
+	t.Run("the same directory under different providers is not a duplicate", func(t *testing.T) {
+		in := []ProfileDir{prof("a", "/same"), oc("b", "/same")}
+		got, err := resolve(fake, func(r *ResolveInput) { r.Profiles = in })
+		if err != nil || !reflect.DeepEqual(got, in) {
+			t.Errorf("got %+v, %v", got, err)
+		}
+	})
+	t.Run("two opencode labels for the same directory are an error", func(t *testing.T) {
+		_, err := resolve(fake, func(r *ResolveInput) { r.Profiles = []ProfileDir{oc("a", "/same"), oc("b", "/same/")} })
+		if err == nil || !strings.Contains(err.Error(), `profiles "a" and "b" point to the same directory (`) {
+			t.Errorf("got %v", err)
+		}
+	})
 }

@@ -1,6 +1,10 @@
 package config
 
-import "path/filepath"
+import (
+	"path/filepath"
+
+	"github.com/danielfnfaria/agtop/internal/domain"
+)
 
 // ValidateClaudeDir checks that dir looks like a Claude Code config directory. A missing
 // directory or projects/ is an error; a missing sessions/ is only a warning (the viewer needs
@@ -18,4 +22,24 @@ func ValidateClaudeDir(dir string, fsys FS) ValidationResult {
 			"which only exists in recent Claude Code versions; live sessions will not be detected")
 	}
 	return res
+}
+
+// ValidateOpencodeDir checks that dir is an opencode data directory: it exists and holds
+// opencode.db.
+func ValidateOpencodeDir(dir string, fsys FS) ValidationResult {
+	if !fsys.IsDirectory(dir) {
+		return ValidationResult{Error: dir + " does not exist or is not a directory"}
+	}
+	if !fsys.IsRegularFile(filepath.Join(dir, OpencodeDBName)) {
+		return ValidationResult{Error: dir + " does not look like an opencode data directory: missing " + OpencodeDBName}
+	}
+	return ValidationResult{}
+}
+
+// ValidateProfile validates dir as the directory of a profile of the given provider.
+func ValidateProfile(p ProfileDir, fsys FS) ValidationResult {
+	if p.Provider == domain.Opencode {
+		return ValidateOpencodeDir(p.Dir, fsys)
+	}
+	return ValidateClaudeDir(p.Dir, fsys)
 }

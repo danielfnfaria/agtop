@@ -62,15 +62,17 @@ type Store struct {
 	usage          *usageTracker
 	lastDiscovery  *discovery.Result
 	profilesSig    []ProfileStatus
-	scanTok        *struct{}
-	scanStop       func()
-	scanQueued     bool
-	errors         []string
-	dirty          bool
-	lastEmitAt     int64
-	emitted        bool
-	emitTok        *struct{}
-	emitStop       func()
+	// unsupportedReported: the profiles without a source were already reported.
+	unsupportedReported bool
+	scanTok             *struct{}
+	scanStop            func()
+	scanQueued          bool
+	errors              []string
+	dirty               bool
+	lastEmitAt          int64
+	emitted             bool
+	emitTok             *struct{}
+	emitStop            func()
 }
 
 // New creates a store; nothing runs until Start.

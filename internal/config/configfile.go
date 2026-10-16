@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/danielfnfaria/agtop/internal/domain"
 	"github.com/danielfnfaria/agtop/internal/ui/style"
 	"github.com/pelletier/go-toml/v2"
 )
@@ -19,10 +20,11 @@ type FileData struct {
 
 var sections = []string{"profiles", "theme", "glyphs", "layout"}
 
-// ParseFile interprets the file text with a strict schema: only [profiles] (label -> path),
+// ParseFile interprets the file text with a strict schema: only [profiles] (label -> path, or
+// label -> { provider, dir }),
 // [theme], [glyphs] and [layout]; anything else is an error naming file (used only for
 // messages) and key.
-func ParseFile(text, file, homedir string) (FileData, error) {
+func ParseFile(text, file string, env Env, homedir string) (FileData, error) {
 	var doc map[string]any
 	if err := toml.Unmarshal([]byte(text), &doc); err != nil {
 		var de *toml.DecodeError
@@ -53,19 +55,11 @@ func ParseFile(text, file, homedir string) (FileData, error) {
 		if strings.TrimSpace(label) == "" {
 			return FileData{}, errorf("%s: profiles has an empty label", file)
 		}
-		s, ok := value.(string)
-		if !ok {
-			return FileData{}, errorf("%s: profiles.%s must be a string path", file, label)
+		profile, err := parseProfile(label, value, file, env, homedir)
+		if err != nil {
+			return FileData{}, err
 		}
-		raw := strings.TrimSpace(s)
-		if raw == "" {
-			return FileData{}, errorf("%s: profiles.%s is an empty path", file, label)
-		}
-		dir := ExpandHome(raw, homedir)
-		if !filepath.IsAbs(dir) {
-			return FileData{}, errorf("%s: profiles.%s = \"%s\" is not absolute (use an absolute path or ~)", file, label, raw)
-		}
-		profiles = append(profiles, ProfileDir{Label: label, Dir: filepath.Clean(dir), Source: SourceConfig})
+		profiles = append(profiles, profile)
 	}
 
 	appearance, err := parseAppearance(doc, order, file)
@@ -73,6 +67,60 @@ func ParseFile(text, file, homedir string) (FileData, error) {
 		return FileData{}, err
 	}
 	return FileData{Profiles: profiles, Appearance: appearance}, nil
+}
+
+// parseProfile reads one [profiles] value: a string is the directory of a Claude Code profile;
+// a table names the provider and, optionally, the directory (opencode defaults to its data dir).
+func parseProfile(label string, value any, file string, env Env, homedir string) (ProfileDir, error) {
+	var raw string
+	var provider domain.ProviderID
+	switch v := value.(type) {
+	case string:
+		raw = v
+	case map[string]any:
+		for key := range v {
+			if key != "provider" && key != "dir" {
+				return ProfileDir{}, errorf("%s: profiles.%s has an unknown key \"%s\" (expected provider, dir)", file, label, key)
+			}
+		}
+		pv, present := v["provider"]
+		if !present {
+			return ProfileDir{}, errorf("%s: profiles.%s needs a provider (\"opencode\" or \"claude-code\")", file, label)
+		}
+		name, ok := pv.(string)
+		if !ok {
+			return ProfileDir{}, errorf("%s: profiles.%s.provider must be a string", file, label)
+		}
+		switch domain.ProviderID(strings.TrimSpace(name)) {
+		case domain.Opencode:
+			provider = domain.Opencode
+		case domain.ClaudeCode:
+			// Claude Code is the default provider of a profile: left empty.
+		default:
+			return ProfileDir{}, errorf("%s: profiles.%s has an unknown provider \"%s\" (expected \"opencode\" or \"claude-code\")", file, label, name)
+		}
+		dv, hasDir := v["dir"]
+		if hasDir {
+			if raw, ok = dv.(string); !ok {
+				return ProfileDir{}, errorf("%s: profiles.%s.dir must be a string path", file, label)
+			}
+		} else if provider == domain.Opencode {
+			return ProfileDir{Label: label, Dir: DefaultOpencodeDir(env, homedir), Source: SourceConfig, Provider: provider}, nil
+		} else {
+			return ProfileDir{}, errorf("%s: profiles.%s needs a dir", file, label)
+		}
+	default:
+		return ProfileDir{}, errorf("%s: profiles.%s must be a string path or a table { provider, dir }", file, label)
+	}
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ProfileDir{}, errorf("%s: profiles.%s is an empty path", file, label)
+	}
+	dir := ExpandHome(raw, homedir)
+	if !filepath.IsAbs(dir) {
+		return ProfileDir{}, errorf("%s: profiles.%s = \"%s\" is not absolute (use an absolute path or ~)", file, label, raw)
+	}
+	return ProfileDir{Label: label, Dir: filepath.Clean(dir), Source: SourceConfig, Provider: provider}, nil
 }
 
 func contains(list []string, s string) bool {
@@ -135,7 +183,7 @@ func LoadFile(explicitPath *string, fsys FS, opts LoadOptions) (Loaded, error) {
 		}
 		return Loaded{}, nil
 	}
-	data, err := ParseFile(text, file, opts.Homedir)
+	data, err := ParseFile(text, file, opts.Env, opts.Homedir)
 	if err != nil {
 		return Loaded{}, err
 	}
