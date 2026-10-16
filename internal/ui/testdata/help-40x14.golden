@@ -2,11 +2,11 @@
 │ Help                                 │
 │ arrows / h j k l  move between sess… │
 │ Enter             open the session;… │
+│ x                 close the selecte… │
 │ Esc / Backspace   back to the tree … │
 │ Tab               switch the detail… │
 │ p                 filter by profile… │
-│ ?                 show or hide this… │
-│ +7 lines (enlarge the terminal)      │
+│ +8 lines (enlarge the terminal)      │
 ╰──────────────────────────────────────╯
 ────────────────────────────────────────
  agtop  │ 5 sessions │ ✗ 0 errors
