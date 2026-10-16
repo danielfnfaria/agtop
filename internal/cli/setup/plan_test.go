@@ -96,7 +96,7 @@ func TestWrapUnwrapCommand(t *testing.T) {
 
 func TestPlanSetup(t *testing.T) {
 	t.Run("c) no statusLine: the print command, appended last", func(t *testing.T) {
-		plan := PlanSetup(mustParse(t, `{"model":"x","env":{"A":"1"}}`), hook)
+		plan := PlanSetup(mustParse(t, `{"model":"x","env":{"A":"1"}}`), hook, nil)
 		if plan.Action != ActionApply {
 			t.Fatalf("action %v", plan.Action)
 		}
@@ -113,7 +113,7 @@ func TestPlanSetup(t *testing.T) {
 
 	t.Run("b) another command: wrapped, other fields and key order kept", func(t *testing.T) {
 		settings := mustParse(t, `{"statusLine":{"type":"command","command":"a && b","padding":0,"refreshInterval":5},"theme":"dark"}`)
-		plan := PlanSetup(settings, hook)
+		plan := PlanSetup(settings, hook, nil)
 		if plan.Action != ActionApply {
 			t.Fatalf("action %v", plan.Action)
 		}
@@ -128,18 +128,96 @@ func TestPlanSetup(t *testing.T) {
 		}
 	})
 
-	t.Run("a) already hooked (any form): nothing to do", func(t *testing.T) {
-		for _, command := range []string{hook + " --print", "input=$(cat); x | node /p statusline-hook; y"} {
+	t.Run("a) already hooked to the same hook (any known form): nothing to do", func(t *testing.T) {
+		for _, command := range []string{
+			hook + " --print",
+			hook + " | my-line",
+			WrapCommand(hook, "my-line"),
+			"input=$(cat); printf '%s' \"$input\" | " + hook + " >/dev/null 2>&1; printf '%s' \"$input\" | my-line",
+		} {
 			settings := mustParse(t, `{"statusLine":{"type":"command","command":`+quote(command)+`}}`)
-			if plan := PlanSetup(settings, hook); plan.Action != ActionAlready {
+			if plan := PlanSetup(settings, hook, nil); plan.Action != ActionAlready {
 				t.Errorf("%q: action %v", command, plan.Action)
 			}
 		}
 	})
 
+	t.Run("hooked in an unknown form: skipped, never already", func(t *testing.T) {
+		for _, command := range []string{"input=$(cat); x | node /p statusline-hook; y", "a; statusline-hook; b"} {
+			settings := mustParse(t, `{"statusLine":{"type":"command","command":`+quote(command)+`}}`)
+			plan := PlanSetup(settings, hook, nil)
+			if plan.Action != ActionSkip || plan.Reason == "" {
+				t.Errorf("%q: %+v", command, plan)
+			}
+		}
+	})
+
+	t.Run("hooked to another agtop: rebuilt around the same original", func(t *testing.T) {
+		const orig = "bash ~/.claude/statusline.sh"
+		const oldHook = "node ~/old/dist/cli.js statusline-hook"
+		for name, tt := range map[string]struct{ command, want, original string }{
+			"wrapped":     {WrapCommand(oldHook, orig), WrapCommand(hook, orig), orig},
+			"wrapped abs": {WrapCommand("/old/agtop statusline-hook", orig), WrapCommand(hook, orig), orig},
+			"piped":       {"/old/agtop statusline-hook | " + orig, WrapCommand(hook, orig), orig},
+			"print only":  {"/old/agtop statusline-hook --print", PrintCommand(hook), ""},
+		} {
+			t.Run(name, func(t *testing.T) {
+				text := `{"model":"x","statusLine":{"type":"command","command":` + quote(tt.command) + `,"padding":0,"refreshInterval":5},"theme":"dark"}`
+				settings := mustParse(t, text)
+				plan := PlanSetup(settings, hook, nil)
+				if plan.Action != ActionApply || !plan.Updated {
+					t.Fatalf("plan %+v", plan)
+				}
+				if !slices.Equal(plan.Settings.Keys(), []string{"model", "statusLine", "theme"}) || !slices.Equal(plan.After.Keys(), []string{"type", "command", "padding", "refreshInterval"}) {
+					t.Errorf("keys %v / %v", plan.Settings.Keys(), plan.After.Keys())
+				}
+				if c, _ := plan.After.Get("command"); c != tt.want {
+					t.Errorf("command %v", c)
+				}
+				if plan.Before == nil || compact(plan.Before) != compact(mustParse(t, text).vals["statusLine"].(*Object)) {
+					t.Errorf("before %s", compact(plan.Before))
+				}
+				if plan.Saved.Command != tt.want {
+					t.Errorf("saved command %q", plan.Saved.Command)
+				}
+				if tt.original == "" {
+					if plan.Saved.Original != nil {
+						t.Errorf("saved original %s", compact(plan.Saved.Original))
+					}
+				} else if compact(plan.Saved.Original) != `{"type":"command","command":`+quote(orig)+`,"padding":0,"refreshInterval":5}` {
+					t.Errorf("saved original %s", compact(plan.Saved.Original))
+				}
+				// Round trip: --remove restores the user's own command, with or without setup.json.
+				for _, saved := range []*Saved{&plan.Saved, nil} {
+					rm := PlanRemove(plan.Settings, saved)
+					if tt.original == "" {
+						if rm.Action != ActionApply || compact(rm.Settings) != `{"model":"x","theme":"dark"}` {
+							t.Errorf("remove: %s", compact(rm.Settings))
+						}
+						continue
+					}
+					want := `{"model":"x","statusLine":{"type":"command","command":` + quote(orig) + `,"padding":0,"refreshInterval":5},"theme":"dark"}`
+					if rm.Action != ActionApply || compact(rm.Settings) != want {
+						t.Errorf("remove: %s", compact(rm.Settings))
+					}
+				}
+			})
+		}
+	})
+
+	t.Run("an existing setup.json keeps its original on update", func(t *testing.T) {
+		old := WrapCommand("/old/agtop statusline-hook", "a && b")
+		settings := mustParse(t, `{"statusLine":{"type":"command","command":`+quote(old)+`}}`)
+		saved := &Saved{Original: mustParse(t, `{"type":"command","command":"a && b"}`), Command: old}
+		plan := PlanSetup(settings, hook, saved)
+		if plan.Action != ActionApply || compact(plan.Saved.Original) != `{"type":"command","command":"a && b"}` || plan.Saved.Command != WrapCommand(hook, "a && b") {
+			t.Errorf("%+v", plan.Saved)
+		}
+	})
+
 	t.Run("a statusLine without a command is skipped", func(t *testing.T) {
 		for _, text := range []string{`{"statusLine":{"type":"command"}}`, `{"statusLine":"x"}`, `{"statusLine":{"command":"  "}}`} {
-			if plan := PlanSetup(mustParse(t, text), hook); plan.Action != ActionSkip {
+			if plan := PlanSetup(mustParse(t, text), hook, nil); plan.Action != ActionSkip {
 				t.Errorf("%s: action %v", text, plan.Action)
 			}
 		}
@@ -154,7 +232,7 @@ func TestPlanRemove(t *testing.T) {
 			`{"statusLine":{"type":"command","command":"a; b","padding":1},"z":1}`,
 			`{"z":1}`,
 		} {
-			setup := PlanSetup(mustParse(t, text), hook)
+			setup := PlanSetup(mustParse(t, text), hook, nil)
 			if setup.Action != ActionApply {
 				t.Fatalf("setup: %v", setup.Action)
 			}

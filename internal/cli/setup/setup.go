@@ -62,11 +62,13 @@ type status string
 const (
 	statusSetUp     status = "set up"
 	statusAlready   status = "already set up"
+	statusUpdated   status = "updated"
 	statusRemoved   status = "removed"
 	statusNotSetUp  status = "not set up"
 	statusSkipped   status = "skipped"
 	statusError     status = "error"
 	statusWouldSet  status = "would set up"
+	statusWouldUpd  status = "would update"
 	statusWouldUndo status = "would remove"
 )
 
@@ -79,6 +81,8 @@ type work struct {
 	exists       bool
 	// newText is the new settings.json text; nil when it is not touched.
 	newText *string
+	// updated: the profile was set up with another hook (setup).
+	updated bool
 	// saved is what to write in setup.json (setup).
 	saved *Saved
 	// cleanup is the files of <configDir>/agtop to delete (remove).
@@ -252,7 +256,7 @@ func inspect(profile config.ProfileDir, remove bool, io IO) *work {
 		return w
 	}
 
-	plan := PlanSetup(settings, io.Hook.Command)
+	plan := PlanSetup(settings, io.Hook.Command, readSaved(profile.Dir))
 	switch plan.Action {
 	case ActionAlready:
 		w.status = statusAlready
@@ -264,6 +268,10 @@ func inspect(profile config.ProfileDir, remove bool, io IO) *work {
 		w.saved = &plan.Saved
 		w.diff = DiffLines(plan.Before, plan.After)
 		w.status = statusSetUp
+		if plan.Updated {
+			w.updated = true
+			w.status = statusUpdated
+		}
 	}
 	for _, file := range overridingFiles(profile.Dir, io.Cwd) {
 		w.warnings = append(w.warnings, fmt.Sprintf("%s defines statusLine, which overrides %s", file, w.settingsFile))
@@ -429,6 +437,9 @@ func Run(profiles []config.ProfileDir, opts Options, io IO) int {
 		case opts.DryRun:
 			for _, w := range todo {
 				w.status = statusWouldSet
+				if w.updated {
+					w.status = statusWouldUpd
+				}
 				if opts.Remove {
 					w.status = statusWouldUndo
 				}

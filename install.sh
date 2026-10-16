@@ -45,6 +45,7 @@ main() {
     *) say "note: $install_dir is not in your PATH; add it to your shell profile:" \
       && say "  export PATH=\"$install_dir:\$PATH\"" ;;
   esac
+  say "run 'agtop setup' to show the 5h/7d plan usage"
 }
 
 detect_os() {
