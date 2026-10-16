@@ -1,0 +1,29 @@
+✳ claude     5h —                      7d —                    (run: agtop setup)   ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+✳ claude-x   5h —                      7d —                                         ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+────────────────────────────────────────────────────────────────────────────────────────────────────
+╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Help                                                                                             │
+│ arrows / h j k l  move between sessions (tree) or agents (detail)                                │
+│ Enter             open the session; in the detail, expand the agent                              │
+│ Esc / Backspace   back to the tree (or close this help)                                          │
+│ Tab               switch the detail panel (agents / pending tools)                               │
+│ p                 filter by profile (all, then each label)                                       │
+│ ?                 show or hide this help                                                         │
+│ Ctrl-L            redraw the whole screen (if something outside garbled it)                      │
+│ q / Ctrl-C        quit                                                                           │
+│ The screen shows only metadata (titles, models, counts, tool names);                             │
+│ never prompts, commands or outputs.                                                              │
+│ profile claude (/tmp/a/.claude)                                                                  │
+│ profile claude-x (/tmp/b/.claude-x)                                                              │
+│ Recent errors: none                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ agtop  │ 5 sessions ● 1 busy │ ⚙ 1 agent │ ✗ 0 errors                    Esc close  ? close  q quit

@@ -1,0 +1,36 @@
+{
+  "scannedAt": 1792167525958,
+  "profiles": [
+    {
+      "label": "p",
+      "liveCount": 1,
+      "sessionsDirMissing": false,
+      "skippedEntries": 0,
+      "issues": {}
+    }
+  ],
+  "totals": {
+    "sessions": 1,
+    "agentsByStatus": {}
+  },
+  "sessions": [
+    {
+      "profile": "p",
+      "liveness": "alive",
+      "activity": "idle",
+      "title": "demo-app",
+      "contextWindow": {
+        "size": 200000,
+        "source": "default"
+      },
+      "contextPercent": 0,
+      "pendingTools": 0,
+      "agents": {
+        "total": 0,
+        "byStatus": {}
+      },
+      "parseErrors": 0
+    }
+  ],
+  "errorCount": 0
+}

@@ -1,0 +1,97 @@
+{
+  "main-session": [
+    {
+      "label": "p",
+      "sessions": [
+        {
+          "sessionId": "sess-0001",
+          "pid": "self",
+          "registry": { "status": "busy", "kind": "interactive", "name": "registry-name" },
+          "transcript": "session-main.jsonl",
+          "agents": { "a-bg-001": "subagent-handback.jsonl" }
+        }
+      ]
+    }
+  ],
+  "resume-session": [
+    {
+      "label": "p",
+      "sessions": [
+        {
+          "sessionId": "sess-0002",
+          "pid": "self",
+          "registry": { "status": "idle", "kind": "interactive" },
+          "transcript": "session-resume.jsonl",
+          "agents": { "a-res-001": "subagent-resume.jsonl" }
+        }
+      ]
+    }
+  ],
+  "two-sessions": [
+    {
+      "label": "p",
+      "sessions": [
+        {
+          "sessionId": "sess-0001",
+          "pid": "self",
+          "registry": { "status": "busy" },
+          "transcript": "session-main.jsonl",
+          "agents": { "a-bg-001": "subagent-handback.jsonl" }
+        },
+        {
+          "sessionId": "sess-0002",
+          "pid": "parent",
+          "registry": { "status": "waiting" },
+          "transcript": "session-resume.jsonl"
+        }
+      ]
+    }
+  ],
+  "two-profiles": [
+    {
+      "label": "work",
+      "sessions": [
+        {
+          "sessionId": "sess-0001",
+          "pid": "self",
+          "registry": { "status": "shell" },
+          "transcript": "session-main.jsonl"
+        }
+      ]
+    },
+    {
+      "label": "home",
+      "sessions": [
+        {
+          "sessionId": "sess-0002",
+          "pid": "parent",
+          "registry": { "status": "idle" },
+          "transcript": "session-resume.jsonl",
+          "agents": { "a-res-001": "subagent-resume.jsonl" }
+        }
+      ]
+    }
+  ],
+  "diagnostics": [
+    {
+      "label": "p",
+      "sessions": [
+        {
+          "sessionId": "sess-0003",
+          "pid": "self",
+          "registry": { "status": "something-new", "kind": "headless", "name": "only-a-name" }
+        }
+      ],
+      "files": { "999999.json": "{", "12345.abc.key": "x", "888888.json": "[1]" }
+    },
+    { "label": "empty", "noSessionsDir": true }
+  ],
+  "no-transcript": [
+    {
+      "label": "p",
+      "sessions": [
+        { "sessionId": "sess-0004", "pid": "self", "registry": { "status": "idle" } }
+      ]
+    }
+  ]
+}

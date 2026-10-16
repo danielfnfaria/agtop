@@ -1,0 +1,29 @@
+✳ claude     5h —                      7d —                    (run: agtop setup)   ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+✳ claude-x   5h —                      7d —                                         ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+────────────────────────────────────────────────────────────────────────────────────────────────────
+✳ Detail task [claude]
+cwd /home/u/projects/detail-proj
+branch feat/x · model Opus 4.7 (high) · version 2.1.0 · pid 777
+provider ✳ Claude Code · profile claude (/tmp/a/.claude)
+● busy · context ████████████░░░░░░░░ 60% 120k/200k
+tokens input 1.5k · output 2.5k · cache read 300k · cache create 40k
+started — · last activity 5s ago (22:13:15)
+
+ Agents (6)   Pending tools (2)
+›▾ ● failed (killed) executor  executa
+     — · fg · 50s · ctx 0 (~0%) · out 0
+       no pending tools
+   ● completed reviewer  revisa
+     — · fg · 20s · ctx 0 (~0%) · out 0
+   ● handed_back planner  planeja
+     — · fg · 10s · ctx 0 (~0%) · out 0
+ ▸ ● running Explore  explora o repo
+     sonnet · fg · 1m05s · ctx 20k (10%) · out 0 · ≡ reading
+   ● launched bg-worker  trabalha no fundo
+     — · bg · 30s · ctx 0 (~0%) · out 0 · ◌ starting
+   ● unknown mystery  sem dados
+     — · fg · — · ctx 0 (~0%) · out 0
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ agtop  │ 1 session ● 1 busy │ ⚙ 2 agents │ ✗ 0 errors
+                                             Esc back  Tab panel  ↑↓ agent  ↵ expand  ? help  q quit

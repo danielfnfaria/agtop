@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: agtop
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: agtop
+    binary: agtop
+    main: .
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X github.com/danielfnfaria/agtop/internal/version.Version={{.Version}}
+
+archives:
+  - id: agtop
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+
+checksum:
+  name_template: checksums.txt
+
+# release-please writes the changelog and the release notes.
+changelog:
+  disable: true
+
+release:
+  mode: keep-existing
+
+homebrew_casks:
+  - name: agtop
+    binaries: [agtop]
+    homepage: https://github.com/danielfnfaria/agtop
+    description: Live terminal view of Claude Code sessions and their subagents
+    license: MIT
+    repository:
+      owner: danielfnfaria
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    commit_msg_template: "chore: agtop {{ .Tag }}"
+    # The binaries are not signed: drop the quarantine attribute so macOS runs them.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/agtop"]
+          end

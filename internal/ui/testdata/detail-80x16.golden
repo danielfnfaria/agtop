@@ -1,0 +1,15 @@
+✳ Detail task [claude]
+● busy · context ████████████░░░░░░░░ 60% 120k/200k
+ Agents (6)   Pending tools (2)
+   ● completed reviewer  revisa
+     — · fg · 20s · ctx 0 (~0%) · out 0
+   ● handed_back planner  planeja
+     — · fg · 10s · ctx 0 (~0%) · out 0
+ ▸ ● running Explore  explora o repo
+     sonnet · fg · 1m05s · ctx 20k (10%) · out 0 · ≡ reading
+›  ● launched bg-worker  trabalha no fundo
+     — · bg · 30s · ctx 0 (~0%) · out 0 · ◌ starting
+agents 2-5 of 6
+────────────────────────────────────────────────────────────────────────────────
+ agtop  │ 1 session ● 1 busy │ ⚙ 2 agents │ ✗ 0 errors
+                         Esc back  Tab panel  ↑↓ agent  ↵ expand  ? help  q quit

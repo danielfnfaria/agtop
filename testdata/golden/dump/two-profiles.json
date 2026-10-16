@@ -1,0 +1,70 @@
+{
+  "scannedAt": 1792167525953,
+  "profiles": [
+    {
+      "label": "work",
+      "liveCount": 1,
+      "sessionsDirMissing": false,
+      "skippedEntries": 0,
+      "issues": {}
+    },
+    {
+      "label": "home",
+      "liveCount": 1,
+      "sessionsDirMissing": false,
+      "skippedEntries": 0,
+      "issues": {}
+    }
+  ],
+  "totals": {
+    "sessions": 2,
+    "agentsByStatus": {
+      "completed": 3,
+      "failed": 1
+    }
+  },
+  "sessions": [
+    {
+      "profile": "home",
+      "liveness": "alive",
+      "activity": "idle",
+      "title": "demo-app",
+      "model": "claude-test-1",
+      "contextWindow": {
+        "size": 200000,
+        "source": "default"
+      },
+      "contextPercent": 0.1,
+      "pendingTools": 0,
+      "agents": {
+        "total": 1,
+        "byStatus": {
+          "completed": 1
+        }
+      },
+      "parseErrors": 0
+    },
+    {
+      "profile": "work",
+      "liveness": "alive",
+      "activity": "shell",
+      "title": "My custom title",
+      "model": "claude-test-1",
+      "contextWindow": {
+        "size": 200000,
+        "source": "default"
+      },
+      "contextPercent": 1.5,
+      "pendingTools": 2,
+      "agents": {
+        "total": 3,
+        "byStatus": {
+          "completed": 2,
+          "failed": 1
+        }
+      },
+      "parseErrors": 1
+    }
+  ],
+  "errorCount": 0
+}

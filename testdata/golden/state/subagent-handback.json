@@ -1,0 +1,71 @@
+{
+  "sessionId": "golden",
+  "context": {
+    "used": 0
+  },
+  "totals": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheCreate": 0
+  },
+  "usageByMessageId": {},
+  "pendingTools": [],
+  "seenToolUseIds": [],
+  "pullRequests": [],
+  "agents": {
+    "a-bg-001": {
+      "context": {
+        "used": 656,
+        "lastMessageId": "sm_03"
+      },
+      "totals": {
+        "input": 6,
+        "output": 36,
+        "cacheRead": 1750,
+        "cacheCreate": 65
+      },
+      "usageByMessageId": {
+        "sm_01": {
+          "input": 3,
+          "output": 7,
+          "cacheRead": 500,
+          "cacheCreate": 40
+        },
+        "sm_02": {
+          "input": 2,
+          "output": 9,
+          "cacheRead": 600,
+          "cacheCreate": 20
+        },
+        "sm_03": {
+          "input": 1,
+          "output": 20,
+          "cacheRead": 650,
+          "cacheCreate": 5
+        }
+      },
+      "pendingTools": [],
+      "seenToolUseIds": [
+        "toolu_s_read",
+        "toolu_s_grep",
+        "toolu_s_hand"
+      ],
+      "pullRequests": [],
+      "type": "unknown",
+      "description": "",
+      "isBackground": false,
+      "status": "handed_back",
+      "agentId": "a-bg-001",
+      "lastActivityAt": 1767261621000,
+      "startedAt": 1767261605000,
+      "model": "claude-haiku-test",
+      "finishedAt": 1767261620000
+    }
+  },
+  "activityHistogram": {
+    "1767261600000": 6
+  },
+  "parseErrors": 0,
+  "ignored": 0
+}

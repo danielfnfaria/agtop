@@ -1,0 +1,42 @@
+{
+  "scannedAt": 1792167525946,
+  "profiles": [
+    {
+      "label": "p",
+      "liveCount": 1,
+      "sessionsDirMissing": false,
+      "skippedEntries": 0,
+      "issues": {}
+    }
+  ],
+  "totals": {
+    "sessions": 1,
+    "agentsByStatus": {
+      "completed": 1
+    }
+  },
+  "sessions": [
+    {
+      "profile": "p",
+      "liveness": "alive",
+      "activity": "idle",
+      "kind": "interactive",
+      "title": "demo-app",
+      "model": "claude-test-1",
+      "contextWindow": {
+        "size": 200000,
+        "source": "default"
+      },
+      "contextPercent": 0.1,
+      "pendingTools": 0,
+      "agents": {
+        "total": 1,
+        "byStatus": {
+          "completed": 1
+        }
+      },
+      "parseErrors": 0
+    }
+  ],
+  "errorCount": 0
+}
