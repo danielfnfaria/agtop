@@ -542,7 +542,21 @@ func (a *App) emptyMessage(filter string) string {
 	if a.snap.ScannedAt == 0 {
 		return "looking for sessions in " + dirs
 	}
-	return "no open Claude Code sessions in " + dirs
+	for _, st := range a.snap.Profiles {
+		if st.Unsupported {
+			return domain.ProviderInfo(st.Provider).DisplayName + " support is not available yet (" + dirs + ")"
+		}
+	}
+	name := "Claude Code"
+	for i, p := range a.profiles {
+		if id := config.ProviderOf(p); i == 0 {
+			name = domain.ProviderInfo(id).DisplayName
+		} else if domain.ProviderInfo(id).DisplayName != name {
+			name = "agent"
+			break
+		}
+	}
+	return "no open " + name + " sessions in " + dirs
 }
 
 // segments draws model segments cut to width.

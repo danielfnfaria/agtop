@@ -111,7 +111,7 @@ work = "~/.claude-work"
 
 `[profiles]` maps a label (shown in the viewer) to a Claude Code config directory, in
 the order of the file. Paths are absolute or start with `~`; two labels for the same
-directory are an error. `agtop setup` reads the same file (and `--config`), so it wires
+directory and provider are an error. `agtop setup` reads the same file (and `--config`), so it wires
 the same profiles.
 
 An opencode profile is a table instead of a path. `dir` is optional (default

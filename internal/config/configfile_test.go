@@ -234,8 +234,8 @@ func TestParseFileOpencodeProfiles(t *testing.T) {
 			{"[profiles]\na = { provider = 1 }", file + `: profiles.a.provider must be a string`},
 			{"[profiles]\na = { provider = \"opencode\", path = \"/x\" }", file + `: profiles.a has an unknown key "path"`},
 			{"[profiles]\na = { provider = \"opencode\", dir = 1 }", file + `: profiles.a.dir must be a string path`},
-			{"[profiles]\na = { provider = \"opencode\", dir = \" \" }", file + `: profiles.a is an empty path`},
-			{"[profiles]\na = { provider = \"opencode\", dir = \"rel\" }", file + `: profiles.a = "rel" is not absolute`},
+			{"[profiles]\na = { provider = \"opencode\", dir = \" \" }", file + `: profiles.a.dir is an empty path`},
+			{"[profiles]\na = { provider = \"opencode\", dir = \"rel\" }", file + `: profiles.a.dir = "rel" is not absolute`},
 			{"[profiles]\na = { provider = \"claude-code\" }", file + `: profiles.a needs a dir`},
 			{"[profiles]\na = 1", file + `: profiles.a must be a string path or a table`},
 		}

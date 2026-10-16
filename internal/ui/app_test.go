@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/danielfnfaria/agtop/internal/closer"
+	"github.com/danielfnfaria/agtop/internal/config"
 	"github.com/danielfnfaria/agtop/internal/discovery"
 	"github.com/danielfnfaria/agtop/internal/domain"
 	"github.com/danielfnfaria/agtop/internal/store"
@@ -642,4 +643,23 @@ func TestCloseNotStartedOnSmallTerminal(t *testing.T) {
 	if len(fc.called) != 0 {
 		t.Fatalf("closer called: %+v", fc.called)
 	}
+}
+
+func TestEmptyStateNamesTheProvider(t *testing.T) {
+	oc := []config.ProfileDir{{Label: "oc", Dir: "/home/u/.local/share/opencode", Provider: domain.Opencode}}
+	t.Run("an unsupported profile says so", func(t *testing.T) {
+		snap := snapshot(nil, oc)
+		snap.Profiles[0].Provider, snap.Profiles[0].Unsupported = domain.Opencode, true
+		frame := screen(newApp(testOptions(newFakeStore(snap), oc), 100, 30))
+		mustContain(t, frame, "opencode support is not available yet (/home/u/.local/share/opencode)")
+		mustNotContain(t, frame, "Claude Code")
+	})
+	t.Run("a supported one names its provider", func(t *testing.T) {
+		frame := screen(newApp(testOptions(newFakeStore(snapshot(nil, oc)), oc), 100, 30))
+		mustContain(t, frame, "no open opencode sessions in")
+	})
+	t.Run("Claude Code stays the default", func(t *testing.T) {
+		frame := screen(newApp(testOptions(newFakeStore(snapshot(nil, profiles)), profiles), 100, 30))
+		mustContain(t, frame, "no open Claude Code sessions in")
+	})
 }

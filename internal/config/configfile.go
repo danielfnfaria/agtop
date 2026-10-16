@@ -74,6 +74,7 @@ func ParseFile(text, file string, env Env, homedir string) (FileData, error) {
 func parseProfile(label string, value any, file string, env Env, homedir string) (ProfileDir, error) {
 	var raw string
 	var provider domain.ProviderID
+	field := "profiles." + label
 	switch v := value.(type) {
 	case string:
 		raw = v
@@ -101,8 +102,9 @@ func parseProfile(label string, value any, file string, env Env, homedir string)
 		}
 		dv, hasDir := v["dir"]
 		if hasDir {
+			field += ".dir"
 			if raw, ok = dv.(string); !ok {
-				return ProfileDir{}, errorf("%s: profiles.%s.dir must be a string path", file, label)
+				return ProfileDir{}, errorf("%s: %s must be a string path", file, field)
 			}
 		} else if provider == domain.Opencode {
 			return ProfileDir{Label: label, Dir: DefaultOpencodeDir(env, homedir), Source: SourceConfig, Provider: provider}, nil
@@ -114,11 +116,11 @@ func parseProfile(label string, value any, file string, env Env, homedir string)
 	}
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return ProfileDir{}, errorf("%s: profiles.%s is an empty path", file, label)
+		return ProfileDir{}, errorf("%s: %s is an empty path", file, field)
 	}
 	dir := ExpandHome(raw, homedir)
 	if !filepath.IsAbs(dir) {
-		return ProfileDir{}, errorf("%s: profiles.%s = \"%s\" is not absolute (use an absolute path or ~)", file, label, raw)
+		return ProfileDir{}, errorf("%s: %s = \"%s\" is not absolute (use an absolute path or ~)", file, field, raw)
 	}
 	return ProfileDir{Label: label, Dir: filepath.Clean(dir), Source: SourceConfig, Provider: provider}, nil
 }

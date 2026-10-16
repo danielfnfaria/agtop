@@ -48,6 +48,8 @@ type ProfileStatus struct {
 	// LiveCount is the live sessions of the last scan.
 	LiveCount          int
 	SessionsDirMissing bool
+	// Unsupported: no source reads the provider of the profile, so it is never scanned.
+	Unsupported bool
 	// SkippedEntries are the entries of sessions/ that are not <pid>.json.
 	SkippedEntries int
 	// Issues counts the invalid registry files by reason.

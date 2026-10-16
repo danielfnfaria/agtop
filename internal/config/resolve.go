@@ -57,7 +57,7 @@ func rejectDuplicates(profiles []ProfileDir, fsys FS) ([]ProfileDir, error) {
 		if err != nil {
 			dir = p.Dir // missing: validation reports it later
 		}
-		key := string(p.Provider) + "\x00" + dir
+		key := string(ProviderOf(p)) + "\x00" + dir
 		if other, ok := seen[key]; ok {
 			return nil, errorf("profiles \"%s\" and \"%s\" point to the same directory (%s)", other.Label, p.Label, p.Dir)
 		}

@@ -130,12 +130,7 @@ func (s *Store) sourceOf(provider domain.ProviderID) source.Source {
 }
 
 // profileProvider is the provider of a profile (Claude Code when it does not say).
-func profileProvider(p config.ProfileDir) domain.ProviderID {
-	if p.Provider == "" {
-		return domain.ClaudeCode
-	}
-	return p.Provider
-}
+func profileProvider(p config.ProfileDir) domain.ProviderID { return config.ProviderOf(p) }
 
 // Snapshot is the last emitted snapshot (the same pointer until the next emission).
 func (s *Store) Snapshot() *Snapshot { return s.snap.Load() }
