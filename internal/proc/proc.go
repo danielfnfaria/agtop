@@ -5,6 +5,7 @@ package proc
 
 import (
 	"errors"
+	"path/filepath"
 	"syscall"
 	"time"
 )
@@ -74,6 +75,12 @@ func revalidateAndKill(pid int, sig syscall.Signal, want Info,
 		return ErrIdentityChanged
 	}
 	return kill(pid, sig)
+}
+
+// MatchesExecutable reports whether a process is the program name: its name (comm) is name, or
+// the base name of its executable path (exe, when known) is. Discovery and the closer share it.
+func MatchesExecutable(name, comm, exe string) bool {
+	return comm == name || (exe != "" && filepath.Base(exe) == name)
 }
 
 // Process is one running process as List reports it.

@@ -33,7 +33,7 @@ func listProc(root, name string) ([]Process, error) {
 		}
 		comm = strings.TrimSpace(comm)
 		exe, _ := os.Readlink(base + "/exe")
-		if comm != name && (exe == "" || filepath.Base(exe) != name) {
+		if !MatchesExecutable(name, comm, exe) {
 			continue
 		}
 		p := Process{PID: pid, Name: comm, Exe: exe}

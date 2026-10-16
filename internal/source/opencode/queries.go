@@ -72,16 +72,21 @@ type rootRow struct {
 	ModelID     string
 	TimeCreated int64
 	TimeUpdated int64
+	// Updated is the latest time_updated of the session row and of its child sessions: a cheap
+	// lower bound of the last touch (the exact one is selectActivity).
+	Updated int64
 }
 
 var queryRoots = `
-SELECT id, directory, title, version, time_created, time_updated, json_extract(model, '$.id')
-FROM session
-WHERE parent_id IS NULL AND time_archived IS NULL
-ORDER BY time_updated DESC
+SELECT s.id, s.directory, s.title, s.version, s.time_created, s.time_updated, json_extract(s.model, '$.id'),
+  MAX(s.time_updated, COALESCE((SELECT MAX(c.time_updated) FROM session c WHERE c.parent_id = s.id), 0)) AS updated
+FROM session s
+WHERE s.parent_id IS NULL AND s.time_archived IS NULL
+ORDER BY updated DESC
 LIMIT ` + itoa(maxRoots)
 
-// selectRoots lists the most recently updated root sessions (cheap: the session table alone).
+// selectRoots lists the most recently updated root sessions (cheap: the session table alone),
+// newest Updated first.
 func selectRoots(db *sql.DB) ([]rootRow, error) {
 	rows, err := db.Query(queryRoots)
 	if err != nil {
@@ -92,12 +97,12 @@ func selectRoots(db *sql.DB) ([]rootRow, error) {
 	for rows.Next() {
 		var r rootRow
 		var directory, title, version, model sql.NullString
-		var created, updated sql.NullInt64
-		if err := rows.Scan(&r.ID, &directory, &title, &version, &created, &updated, &model); err != nil {
+		var created, updated, touched sql.NullInt64
+		if err := rows.Scan(&r.ID, &directory, &title, &version, &created, &updated, &model, &touched); err != nil {
 			return nil, codedErr(CodeQuery, err)
 		}
 		r.Directory, r.Title, r.Version, r.ModelID = directory.String, title.String, version.String, model.String
-		r.TimeCreated, r.TimeUpdated = created.Int64, updated.Int64
+		r.TimeCreated, r.TimeUpdated, r.Updated = created.Int64, updated.Int64, touched.Int64
 		out = append(out, r)
 	}
 	if err := rows.Err(); err != nil {

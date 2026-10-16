@@ -4,7 +4,6 @@ package proc
 
 import (
 	"bytes"
-	"path/filepath"
 	"syscall"
 	"time"
 	"unsafe"
@@ -37,7 +36,7 @@ func list(name string) ([]Process, error) {
 		if raw, err := unix.SysctlRaw("kern.procargs2", pid); err == nil {
 			exe = exeFromProcArgs2(raw)
 		}
-		if comm != name && (exe == "" || filepath.Base(exe) != name) {
+		if !MatchesExecutable(name, comm, exe) {
 			continue
 		}
 		out = append(out, Process{

@@ -215,10 +215,11 @@ exits.
   only their active agents. The full agent history is in the detail view.
 - opencode keeps no session registry: each running `opencode` process is shown as the most
   recently touched session of its working directory that was touched since the process started.
-  So a session resumed from `/sessions` appears at its first new message, two opencode processes
-  in the same directory show the two most recent sessions (the newest process takes the newest
-  session), and `x` closes the process shown. Permission requests are not persisted, so an
-  opencode session is never shown as waiting.
+  So a session resumed from `/sessions` appears at its first new message, and `x` closes the
+  process shown. With two opencode processes in the same directory the two most recent sessions
+  are shown without a pid (which one belongs to which process is a guess, so neither can be
+  closed), and two profiles over the same directory show a process once. Permission requests
+  are not persisted, so an opencode session is never shown as waiting.
 
 ## Development
 

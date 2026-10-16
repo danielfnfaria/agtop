@@ -218,13 +218,14 @@ func (c *Closer) closeOpencode(card Card) error {
 	return nil
 }
 
-// isOpencode reports whether the process is the opencode binary: its name, or the base name of
-// its executable (argv[0] when the command line is known).
+// isOpencode reports whether the process is the opencode binary, by the same rule discovery
+// lists it (name, or the base name of its executable: argv[0] when the command line is known).
 func isOpencode(info proc.Info) bool {
-	if info.Name == opencodeProcessName {
-		return true
+	var exe string
+	if len(info.Args) > 0 {
+		exe = info.Args[0]
 	}
-	return len(info.Args) > 0 && filepath.Base(info.Args[0]) == opencodeProcessName
+	return proc.MatchesExecutable(opencodeProcessName, info.Name, exe)
 }
 
 // isClaude reports whether the process is Claude Code: the "claude" binary, or node/bun running

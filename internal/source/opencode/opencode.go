@@ -16,6 +16,7 @@ package opencode
 
 import (
 	"cmp"
+	"database/sql"
 	"errors"
 	"maps"
 	"os"
@@ -39,6 +40,10 @@ const (
 	ProcessName = "opencode"
 	// CodeProcesses: the processes could not be listed.
 	CodeProcesses = "PROC_LIST"
+	// updatedLagMs is how far session.time_updated may trail the real last touch (messages and
+	// parts): candidates are read in time_updated order and the exact touch is only computed
+	// while a candidate may still rank.
+	updatedLagMs = 60_000
 
 	refPrefix    = "opencode:"
 	agentsSuffix = "/agents"
@@ -169,12 +174,15 @@ func (s *Source) Discover(profiles []config.ProfileDir) (discovery.Result, error
 		return result, codedErr(CodeProcesses, err)
 	}
 	byCwd := processesByCwd(procs)
+	// A process shows one session: a pid claimed by a profile is not offered to the next one
+	// (two profiles over the same directory would otherwise show it twice).
+	claimed := map[int]bool{}
 	var firstErr error
 	for _, profile := range profiles {
 		pd := discovery.ProfileDiscovery{Profile: profile}
 		var roots []discovery.DiscoveredSession
 		if len(byCwd) > 0 {
-			roots, err = s.discoverProfile(profile, byCwd)
+			roots, err = s.discoverProfile(profile, byCwd, claimed)
 		}
 		if err != nil {
 			pd.Diagnostics.Issues = []discovery.RegistryIssue{{File: config.OpencodeDBName, Reason: discovery.IssueDatabase}}
@@ -222,9 +230,17 @@ type candidate struct {
 	activityRow
 }
 
-// discoverProfile is the live sessions of a profile: one per running process, the most recently
-// touched root session of the process cwd that was touched since the process started.
-func (s *Source) discoverProfile(profile config.ProfileDir, byCwd map[string][]proc.Process) ([]discovery.DiscoveredSession, error) {
+func startMillis(p proc.Process) int64 {
+	if p.Start.IsZero() {
+		return 0
+	}
+	return p.Start.UnixMilli()
+}
+
+// discoverProfile is the live sessions of a profile: one per running process not claimed yet,
+// the most recently touched root session of the process cwd that was touched since the process
+// started.
+func (s *Source) discoverProfile(profile config.ProfileDir, byCwd map[string][]proc.Process, claimed map[int]bool) ([]discovery.DiscoveredSession, error) {
 	db, err := s.dbFor(profile)
 	if err != nil {
 		return nil, err
@@ -237,8 +253,9 @@ func (s *Source) discoverProfile(profile config.ProfileDir, byCwd map[string][]p
 	if err != nil {
 		return nil, err
 	}
+	// Roots per directory, in Updated order (as selected).
 	resolved := map[string]string{}
-	byDir := map[string][]candidate{}
+	byDir := map[string][]rootRow{}
 	for _, r := range roots {
 		if r.ID == "" || r.Directory == "" {
 			continue
@@ -248,38 +265,80 @@ func (s *Source) discoverProfile(profile config.ProfileDir, byCwd map[string][]p
 			dir = resolveDir(r.Directory)
 			resolved[r.Directory] = dir
 		}
-		if len(byCwd[dir]) == 0 {
-			continue
+		if len(byCwd[dir]) > 0 {
+			byDir[dir] = append(byDir[dir], r)
 		}
-		activity, err := selectActivity(conn, r)
-		if err != nil {
-			return nil, err
-		}
-		byDir[dir] = append(byDir[dir], candidate{r, activity})
 	}
 	var live []discovery.DiscoveredSession
 	for _, dir := range slices.Sorted(maps.Keys(byDir)) {
-		sessions := byDir[dir]
-		slices.SortStableFunc(sessions, func(a, b candidate) int { return cmp.Compare(b.LastActivity, a.LastActivity) })
-		// Processes newest first: each takes the newest session left that it may have touched.
+		var procs []proc.Process
 		for _, p := range byCwd[dir] {
-			var start int64
-			if !p.Start.IsZero() {
-				start = p.Start.UnixMilli()
+			if !claimed[p.PID] {
+				procs = append(procs, p)
 			}
+		}
+		if len(procs) == 0 {
+			continue
+		}
+		sessions, err := s.candidates(conn, byDir[dir], procs)
+		if err != nil {
+			return nil, err
+		}
+		// With several processes in one directory the session to process assignment is a
+		// guess: the sessions are shown, but no pid is exposed (nothing may be closed by it).
+		ambiguous := len(procs) > 1
+		// Processes newest first: each takes the newest session left that it may have touched.
+		for _, p := range procs {
+			start := startMillis(p)
 			i := slices.IndexFunc(sessions, func(c candidate) bool { return c.LastActivity >= start })
 			if i < 0 {
 				continue
 			}
 			c := sessions[i]
 			sessions = slices.Delete(sessions, i, i+1)
+			claimed[p.PID] = true
+			if ambiguous {
+				p, start = proc.Process{}, 0
+			}
 			live = append(live, s.discovered(profile, db, c, p, start))
 		}
 	}
 	return live, nil
 }
 
-// discovered is the session c as shown for the process p that owns it.
+// candidates reads the exact last touch of the roots of a directory (given in Updated order)
+// that may be the sessions of procs, newest touch first, querying as few as possible: a root
+// stops being worth a query once its Updated is more than the lag behind the oldest process
+// start, or, with enough candidates found already, behind the touch of the last one that ranks
+// (session.time_updated trails the real touch by at most updatedLagMs).
+func (s *Source) candidates(conn *sql.DB, roots []rootRow, procs []proc.Process) ([]candidate, error) {
+	oldest := startMillis(procs[0])
+	for _, p := range procs[1:] {
+		oldest = min(oldest, startMillis(p))
+	}
+	var out []candidate
+	for _, r := range roots {
+		if r.Updated < oldest-updatedLagMs {
+			break
+		}
+		if len(out) >= len(procs) && r.Updated < out[len(procs)-1].LastActivity-updatedLagMs {
+			break
+		}
+		activity, err := selectActivity(conn, r)
+		if err != nil {
+			return nil, err
+		}
+		if activity.LastActivity < oldest {
+			continue
+		}
+		out = append(out, candidate{r, activity})
+		slices.SortStableFunc(out, func(a, b candidate) int { return cmp.Compare(b.LastActivity, a.LastActivity) })
+	}
+	return out, nil
+}
+
+// discovered is the session c as shown for the process p that owns it (a zero p: the process is
+// not told, see discoverProfile).
 func (s *Source) discovered(profile config.ProfileDir, db *profileDB, c candidate, p proc.Process, start int64) discovery.DiscoveredSession {
 	state := discovery.ActivityIdle
 	if c.InProgress {

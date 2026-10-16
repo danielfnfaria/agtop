@@ -202,23 +202,23 @@ func TestDiscoverByProcess(t *testing.T) {
 		older, newer := procAt(100, "/home/u/proj", time.UnixMilli(now-2*hour).UTC()), procAt(200, "/home/u/proj", time.UnixMilli(now-30*minute).UTC())
 		s := newSourceWith(t, f, []proc.Process{older, newer})
 		pd := discoverOne(t, s, f)
+		// Both sessions show, but the assignment is a guess: no pid is exposed, so nothing can
+		// be closed by it.
 		pids := map[string]int{}
 		for _, d := range pd.Live {
 			pids[d.SessionID] = d.PID
+			if d.ProcessStartedAt != 0 {
+				t.Errorf("%s: process start exposed: %d", d.SessionID, d.ProcessStartedAt)
+			}
 		}
-		if len(pids) != 2 || pids["ses_b"] != 200 || pids["ses_a"] != 100 {
+		if len(pids) != 2 || pids["ses_b"] != 0 || pids["ses_a"] != 0 {
 			t.Errorf("pids = %v", pids)
 		}
-		// A late write to the older session after the newer process started does not steal
-		// the newer process's session: the newest touch wins.
+		// A late write to the older session after the newer process started does not drop the
+		// newer session: both still rank.
 		f.addMessage("ses_a", "msg_a_late", now-20*minute, now-20*minute, userData(now-20*minute, model))
-		pd = discoverOne(t, s, f)
-		pids = map[string]int{}
-		for _, d := range pd.Live {
-			pids[d.SessionID] = d.PID
-		}
-		if len(pids) != 2 || pids["ses_b"] != 200 || pids["ses_a"] != 100 {
-			t.Errorf("after a late write: %v", pids)
+		if got := liveIDs(discoverOne(t, s, f)); len(got) != 2 || got["ses_a"] == "" || got["ses_b"] == "" {
+			t.Errorf("after a late write: %v", got)
 		}
 		f.deleteSession("ses_a")
 		f.addSession(sessionSpec{ID: "ses_a", Title: "A", Model: model, Created: now - hour, Updated: now - hour})
@@ -265,6 +265,34 @@ func TestDiscoverByProcess(t *testing.T) {
 		if got := liveIDs(discoverOne(t, s, f)); len(got) != 0 {
 			t.Errorf("exited: %v", got)
 		}
+	})
+	t.Run("two profiles over the same directory: the process is claimed once", func(t *testing.T) {
+		s := newSourceWith(t, f, []proc.Process{procAt(800, "/home/u/proj", procStart)})
+		second := f.profile()
+		second.Label = "oc2"
+		res, err := s.Discover([]config.ProfileDir{f.profile(), second})
+		if err != nil || len(res.Profiles) != 2 || len(res.Profiles[0].Live) != 1 || len(res.Profiles[1].Live) != 0 {
+			t.Errorf("err = %v, live = %d/%d", err, len(res.Profiles[0].Live), len(res.Profiles[1].Live))
+		}
+	})
+	t.Run("old sessions are not examined", func(t *testing.T) {
+		// A root far before the process start with a message whose data is not JSON: examining
+		// it (json_extract) would fail the scan.
+		f.addSession(sessionSpec{ID: "ses_ancient", Title: "Ancient", Model: model, Created: now - 48*hour, Updated: now - 48*hour})
+		f.exec(`INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES ('msg_bad', 'ses_ancient', ?, ?, 'not json')`, now-48*hour, now-48*hour)
+		s := newSourceWith(t, f, []proc.Process{procAt(900, "/home/u/proj", procStart)})
+		if got := liveIDs(discoverOne(t, s, f)); len(got) != 1 || got["ses_b"] == "" {
+			t.Errorf("live = %v", got)
+		}
+		// Not even when it ranks second by time_updated but is already out of reach: a session
+		// touched well before the session found.
+		f.addSession(sessionSpec{ID: "ses_between", Title: "Between", Model: model, Created: now - hour, Updated: now - 30*minute})
+		f.exec(`INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES ('msg_bad2', 'ses_between', ?, ?, 'not json')`, now-30*minute, now-30*minute)
+		if got := liveIDs(discoverOne(t, s, f)); len(got) != 1 || got["ses_b"] == "" {
+			t.Errorf("live = %v", got)
+		}
+		f.deleteSession("ses_ancient")
+		f.deleteSession("ses_between")
 	})
 	t.Run("the process list fails: a coded error, no sessions", func(t *testing.T) {
 		s := newSourceListing(t, f, func() ([]proc.Process, error) { return nil, errors.New("sysctl: boom") })
