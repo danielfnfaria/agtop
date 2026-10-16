@@ -9,22 +9,10 @@ sub-agents each one launched. Think `htop`, but for your agents.
 
 Each session is a box with its active agents hanging below it:
 
-```
-         ╭─ ✳ Refactor parser ──────── ⠋ ─╮
-         │ Opus 5.5 · high                 │
-         │ ctx ███░░░░░░░  28%  279k/1M    │
-         │ agents  2 active · 9 total      │
-         │ #201  #198                      │
-         │ ● busy · 3s ago                 │
-         ╰─────────────────────────────────╯
-                          │
-           ┌──────────────┴──────────────┐
-╭────────────────────────╮  ╭────────────────────────╮
-│ executor · opus  2m10s │  │ reviewer · fable    3s │
-│ ⠙ ✓ running tests      │  │ ⠙ ≡ reading            │
-│ Fix flaky store test   │  │ Review the diff        │
-╰────────────────────────╯  ╰────────────────────────╯
-```
+<p align="center">
+  <img src=".github/assets/screenshot.png" alt="agtop showing two Claude Code sessions, one with four sub-agents running" width="49%">
+  <img src=".github/assets/screenshot-states.png" alt="agtop showing a busy session with one sub-agent thinking next to an idle session" width="49%">
+</p>
 
 What you see:
 
@@ -48,13 +36,29 @@ commands and sub-agent results.
 
 - macOS or Linux
 - A recent Claude Code (one that writes `sessions/<pid>.json` in its config directory)
-- Go 1.26 or later, to build it
+- Go 1.26 or later, only to build from source
 
 ## Install
 
+Homebrew (macOS):
+
+```bash
+brew install danielfnfaria/tap/agtop
+```
+
+Script (macOS and Linux, amd64/arm64; installs to `~/.local/bin`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/danielfnfaria/agtop/main/install.sh | sh
+```
+
+Set `AGTOP_VERSION=0.1.0` to pin a version or `AGTOP_INSTALL_DIR=/usr/local/bin` to pick the
+directory.
+
+With Go:
+
 ```bash
 go install github.com/danielfnfaria/agtop@latest
-agtop
 ```
 
 From source:
