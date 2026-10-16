@@ -37,6 +37,9 @@ type PendingEntry struct {
 type ModelInfo struct {
 	ID   string `json:"id"`
 	Name string `json:"name,omitempty"`
+	// ContextWindow is the window size the provider itself reported for this model, 0 when it
+	// did not (the viewer then estimates it).
+	ContextWindow int `json:"contextWindow,omitempty"`
 }
 
 type AgentStatus string
@@ -233,6 +236,8 @@ type ModelAttachmentEvent struct {
 	EventBase
 	ModelID string `json:"modelId"`
 	Name    string `json:"name,omitempty"`
+	// ContextWindow is the window the provider reported for the model, 0 when unknown.
+	ContextWindow int `json:"contextWindow,omitempty"`
 }
 
 type AITitleEvent struct {

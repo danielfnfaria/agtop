@@ -227,18 +227,19 @@ func TestTwoSources(t *testing.T) {
 }
 
 func TestProfileWithoutSource(t *testing.T) {
-	t.Run("an opencode profile alone is reported once and the scan counts as done", func(t *testing.T) {
+	t.Run("a profile of a provider without a source is reported once and the scan counts as done", func(t *testing.T) {
+		const noSource domain.ProviderID = "no-source"
 		tr := makeTree(t)
 		s := newTestStore(t, tr, func(o *Options) {
-			withProviders(tr, domain.Opencode)(o)
+			withProviders(tr, noSource)(o)
 			o.Watch, o.EmitThrottleMs = false, 10
 		}, Deps{})
 		s.Start()
 		snap := s.waitFor(t, func(x *Snapshot) bool { return x.ScannedAt != 0 && len(x.Errors) > 0 }, 0)
-		if len(snap.Errors) != 1 || snap.Errors[0] != "profile test: opencode support is not available yet" {
+		if len(snap.Errors) != 1 || snap.Errors[0] != "profile test: no-source support is not available yet" {
 			t.Errorf("errors = %v", snap.Errors)
 		}
-		if len(snap.Profiles) != 1 || snap.Profiles[0].Provider != domain.Opencode || len(snap.Sessions) != 0 {
+		if len(snap.Profiles) != 1 || snap.Profiles[0].Provider != noSource || len(snap.Sessions) != 0 {
 			t.Errorf("profiles = %+v, sessions = %d", snap.Profiles, len(snap.Sessions))
 		}
 		s.Refresh()

@@ -103,6 +103,8 @@ const (
 	IssueInvalidPID       IssueReason = "invalid_pid"
 	IssuePIDMismatch      IssueReason = "pid_mismatch"
 	IssueInvalidSessionID IssueReason = "invalid_session_id"
+	// IssueDatabase: a provider database (File) could not be read; the store error says why.
+	IssueDatabase IssueReason = "database"
 )
 
 // RegistryIssue is a problem with a registry file. It never includes file content.

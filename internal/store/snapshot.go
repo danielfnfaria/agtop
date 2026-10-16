@@ -152,13 +152,10 @@ func (p projector) project(e *sessionEntry) *SessionView {
 	}
 	d := e.discovered
 	id := modelID(s)
-	usage := domain.ComputeContextUsage(id, s.Context.Used, p.learner.learned, domain.ReportedWindows{
-		Session: reports.ForSession(s.SessionID, id),
-		Model:   reports.ForModel(id),
-	})
+	usage := domain.ComputeContextUsage(id, s.Context.Used, p.learner.learned, sessionWindows(s, reports))
 	agents := make(map[string]*AgentView, len(s.Agents))
 	for key, agent := range s.Agents {
-		agents[key] = agentView(agent, p.learner.learned, reports.ForModel(agent.Model))
+		agents[key] = agentView(agent, p.learner.learned, agentWindow(s, agent, reports))
 	}
 	var model *domain.ModelInfo
 	if s.Model != nil {

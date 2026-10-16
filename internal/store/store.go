@@ -14,6 +14,7 @@ import (
 	"github.com/danielfnfaria/agtop/internal/ingest/watcher"
 	"github.com/danielfnfaria/agtop/internal/source"
 	"github.com/danielfnfaria/agtop/internal/source/claudecode"
+	"github.com/danielfnfaria/agtop/internal/source/opencode"
 )
 
 // DefaultDeps are the collaborators over the real system.
@@ -64,15 +65,19 @@ type Store struct {
 	profilesSig    []ProfileStatus
 	// unsupportedReported: the profiles without a source were already reported.
 	unsupportedReported bool
-	scanTok             *struct{}
-	scanStop            func()
-	scanQueued          bool
-	errors              []string
-	dirty               bool
-	lastEmitAt          int64
-	emitted             bool
-	emitTok             *struct{}
-	emitStop            func()
+	// lastGood is the last successful discovery of each source, kept when a scan of it fails;
+	// lastScanCode is the code of its last failure ("" after a success), reported on change.
+	lastGood     map[domain.ProviderID][]discovery.ProfileDiscovery
+	lastScanCode map[domain.ProviderID]string
+	scanTok      *struct{}
+	scanStop     func()
+	scanQueued   bool
+	errors       []string
+	dirty        bool
+	lastEmitAt   int64
+	emitted      bool
+	emitTok      *struct{}
+	emitStop     func()
 }
 
 // New creates a store; nothing runs until Start.
@@ -96,7 +101,7 @@ func New(opts Options, deps Deps) *Store {
 	}
 	d.Sources = deps.Sources
 	if len(d.Sources) == 0 {
-		d.Sources = []source.Source{claudecode.New(d.Discovery, d.NewTailer)}
+		d.Sources = []source.Source{claudecode.New(d.Discovery, d.NewTailer), opencode.New(opencode.Options{})}
 	}
 	s := &Store{
 		opts:           opts,
@@ -111,6 +116,14 @@ func New(opts Options, deps Deps) *Store {
 		fileIndex:      map[string]fileRef{},
 		subagentsIndex: map[string]*sessionEntry{},
 		retired:        map[string]retiredActivity{},
+		lastGood:       map[domain.ProviderID][]discovery.ProfileDiscovery{},
+		lastScanCode:   map[domain.ProviderID]string{},
+	}
+	// A source that holds resources (e.g. database connections) is closed with the store.
+	for _, src := range s.sources {
+		if c, ok := src.(io.Closer); ok {
+			s.closers[c] = struct{}{}
+		}
 	}
 	s.snap.Store(EmptySnapshot)
 	s.usage = newUsageTracker(s)
