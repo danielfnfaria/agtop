@@ -1,0 +1,23 @@
+✳ claude     5h —                      7d —                      ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+✳ claude-x   5h —                      7d —                      ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+────────────────────────────────────────────────────────────────────────────────
+
+    ╭─ ✳ Alpha task ───────────── ⠋ ─╮    ╭─ ✳ Bravo task ─────────────────╮
+    │             claude             │    │            claude-x            │
+    │ Opus 4.7                       │    │ mystery-model          sdk-cli │
+    │ ctx █████░░░░░  45%  90k/200k  │    │ ctx ███░░░░░░░ ~25%  50k/~200k │
+    │ agents  1 active · 2 total     │    │ agents  none                   │
+    │ no PRs                         │    │ no PRs                         │
+    │ ● busy · 5s ago                │    │ ● idle · 2m ago                │
+    ╰────────────────────────────────╯    ╰────────────────────────────────╯
+                     │
+                     │
+        ╭────────────────────────╮
+        │ general-purpose    10s │
+        │ ⠋ … thinking           │
+        │ faz algo               │
+        ╰────────────────────────╯
+↓ more below
+────────────────────────────────────────────────────────────────────────────────
+ agtop  │ 5 sessions ● 1 busy │ ⚙ 1 agent │ ✗ 0 errors
+                                               ↵ open  p profile  ? help  q quit

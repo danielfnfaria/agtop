@@ -1,0 +1,29 @@
+✳ claude     5h —      7d —
+✳ claude-x   5h —      7d —
+────────────────────────────────────────
+
+   ╭─ ✳ Detail task ──────────── ⠋ ─╮
+   │             claude             │
+   │ Opus 4.7 · high                │
+   │ ctx ██████░░░░  60%  120k/200k │
+   │ agents  2 active · 6 total     │
+   │ no PRs                         │
+   │ ● busy · 5s ago                │
+   ╰────────────────────────────────╯
+                    │
+     ┌──────────────┤
+     │ ╭────────────────────────╮
+     │ │ Explore · sonnet 1m05s │
+     │ │ ⠋ ≡ reading            │
+     │ │ explora o repo         │
+     │ ╰────────────────────────╯
+     └──────────────┐
+       ╭────────────────────────╮
+       │ bg-worker          30s │
+       │ ⠋ ◌ starting           │
+       │ trabalha no fundo      │
+       ╰────────────────────────╯
+
+────────────────────────────────────────
+ agtop  │ 1 session │ ✗ 0 errors
+       ↵ open  p profile  ? help  q quit

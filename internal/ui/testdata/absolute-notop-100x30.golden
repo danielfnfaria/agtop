@@ -1,0 +1,29 @@
+
+              ╭─ ✳ Alpha task ───────────── ⠋ ─╮    ╭─ ✳ Bravo task ─────────────────╮
+              │             claude             │    │            claude-x            │
+              │ Opus 4.7                       │    │ mystery-model          sdk-cli │
+              │ ctx █████░░░░░  45%  90k/200k  │    │ ctx ███░░░░░░░ ~25%  50k/~200k │
+              │ agents  1 active · 2 total     │    │ agents  none                   │
+              │ no PRs                         │    │ no PRs                         │
+              │ ● busy · 22:13:15              │    │ ● idle · 22:11:15              │
+              ╰────────────────────────────────╯    ╰────────────────────────────────╯
+                               │
+                               │
+                  ╭────────────────────────╮
+                  │ general-purpose    10s │
+                  │ ⠋ … thinking           │
+                  │ faz algo               │
+                  ╰────────────────────────╯
+
+              ╭─ ✳ Charlie task ───────────────╮    ╭─ ✳ Delta task ─────────────────╮
+              │             claude             │    │             claude             │
+              │ unknown model                  │    │ unknown model                  │
+              │ ctx ░░░░░░░░░░   0%  0/200k    │    │ ctx ░░░░░░░░░░   0%  0/200k    │
+              │ agents  none                   │    │ agents  none                   │
+              │ no PRs                         │    │ no PRs                         │
+              │ ● ended 22:13:08               │    │ ● idle · 22:13:15              │
+              ╰────────────────────────────────╯    ╰────────────────────────────────╯
+
+↓ more below
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ agtop  │ 5 sessions ● 1 busy │ ⚙ 1 agent │ ✗ 0 errors             ↵ open  p profile  ? help  q quit

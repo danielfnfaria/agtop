@@ -1,0 +1,23 @@
+✳ claude     5h —                      7d —                      ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+✳ claude-x   5h —                      7d —                      ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+────────────────────────────────────────────────────────────────────────────────
+↑ more above
+    │ unknown model                  │    │ unknown model                  │
+    │ ctx ░░░░░░░░░░   0%  0/200k    │    │ ctx ░░░░░░░░░░   0%  0/200k    │
+    │ agents  none                   │    │ agents  none                   │
+    │ no PRs                         │    │ no PRs                         │
+    │ ● idle · 5s ago                │    │ ● idle · 5s ago                │
+    ╰────────────────────────────────╯    ╰────────────────────────────────╯
+
+    ┏━ ✳ Many 4 ━━━━━━━━━━━━━━━━━━━━━┓    ╭─ ✳ Many 5 ─────────────────────╮
+    ┃             claude             ┃    │             claude             │
+    ┃ unknown model                  ┃    │ unknown model                  │
+    ┃ ctx ░░░░░░░░░░   0%  0/200k    ┃    │ ctx ░░░░░░░░░░   0%  0/200k    │
+    ┃ agents  none                   ┃    │ agents  none                   │
+    ┃ no PRs                         ┃    │ no PRs                         │
+    ┃ ● idle · 5s ago                ┃    │ ● idle · 5s ago                │
+    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛    ╰────────────────────────────────╯
+↓ more below
+────────────────────────────────────────────────────────────────────────────────
+ agtop  │ 9 sessions │ ⚙ 0 agents │ ✗ 0 errors
+                                               ↵ open  p profile  ? help  q quit

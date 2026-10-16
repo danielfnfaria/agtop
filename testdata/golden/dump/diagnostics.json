@@ -1,0 +1,48 @@
+{
+  "scannedAt": 1792167525956,
+  "profiles": [
+    {
+      "label": "p",
+      "liveCount": 1,
+      "sessionsDirMissing": false,
+      "skippedEntries": 1,
+      "issues": {
+        "not_object": 1,
+        "invalid_json": 1
+      }
+    },
+    {
+      "label": "empty",
+      "liveCount": 0,
+      "sessionsDirMissing": true,
+      "skippedEntries": 0,
+      "issues": {}
+    }
+  ],
+  "totals": {
+    "sessions": 1,
+    "agentsByStatus": {}
+  },
+  "sessions": [
+    {
+      "profile": "p",
+      "liveness": "alive",
+      "activity": "unknown",
+      "rawStatus": "something-new",
+      "kind": "headless",
+      "title": "only-a-name",
+      "contextWindow": {
+        "size": 200000,
+        "source": "default"
+      },
+      "contextPercent": 0,
+      "pendingTools": 0,
+      "agents": {
+        "total": 0,
+        "byStatus": {}
+      },
+      "parseErrors": 0
+    }
+  ],
+  "errorCount": 0
+}

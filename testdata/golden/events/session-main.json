@@ -1,0 +1,505 @@
+[
+  {
+    "kind": "ignored",
+    "lineType": "permission-mode"
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261600000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "model_attachment",
+    "timestamp": 1767261600000,
+    "modelId": "claude-test-1",
+    "name": "Claude Test 1"
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261600000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "ignored",
+    "lineType": "attachment:date",
+    "timestamp": 1767261600000
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261601000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "user_prompt",
+    "isMeta": false,
+    "timestamp": 1767261601000
+  },
+  {
+    "kind": "ai_title",
+    "title": "Demo title refactor"
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261602000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "assistant",
+    "timestamp": 1767261602000,
+    "toolUses": [],
+    "messageId": "msg_01",
+    "model": "claude-test-1",
+    "requestedModel": "claude-test-1",
+    "effort": "high",
+    "usage": {
+      "input": 10,
+      "output": 5,
+      "cacheRead": 1000,
+      "cacheCreate": 100
+    }
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261602000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "assistant",
+    "timestamp": 1767261602000,
+    "toolUses": [],
+    "messageId": "msg_01",
+    "model": "claude-test-1",
+    "requestedModel": "claude-test-1",
+    "effort": "high",
+    "usage": {
+      "input": 10,
+      "output": 5,
+      "cacheRead": 1000,
+      "cacheCreate": 100
+    }
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261602000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "assistant",
+    "timestamp": 1767261602000,
+    "toolUses": [
+      {
+        "id": "toolu_agent_bg",
+        "name": "Agent",
+        "agentLaunch": {
+          "type": "explorer",
+          "description": "Scan repo",
+          "runInBackground": true,
+          "model": "haiku"
+        }
+      }
+    ],
+    "messageId": "msg_01",
+    "model": "claude-test-1",
+    "requestedModel": "claude-test-1",
+    "effort": "high",
+    "stopReason": "tool_use",
+    "usage": {
+      "input": 10,
+      "output": 5,
+      "cacheRead": 1000,
+      "cacheCreate": 100
+    }
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261603000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "tool_result",
+    "toolUseId": "toolu_agent_bg",
+    "isError": false,
+    "timestamp": 1767261603000,
+    "agentLaunch": {
+      "agentId": "a-bg-001",
+      "description": "Scan repo",
+      "resolvedModel": "claude-haiku-test"
+    }
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261604000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "assistant",
+    "timestamp": 1767261604000,
+    "toolUses": [
+      {
+        "id": "toolu_agent_fg",
+        "name": "Agent",
+        "agentLaunch": {
+          "type": "reviewer",
+          "description": "Review diff",
+          "runInBackground": false
+        }
+      }
+    ],
+    "messageId": "msg_02",
+    "model": "claude-test-1",
+    "requestedModel": "claude-test-1",
+    "effort": "high",
+    "stopReason": "tool_use",
+    "usage": {
+      "input": 20,
+      "output": 30,
+      "cacheRead": 2000,
+      "cacheCreate": 50
+    }
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261605000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "tool_result",
+    "toolUseId": "toolu_agent_fg",
+    "isError": false,
+    "timestamp": 1767261605000,
+    "agentLaunch": {
+      "agentId": "a-fg-002",
+      "description": "Review diff",
+      "resolvedModel": "claude-test-1"
+    }
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261611000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "assistant",
+    "timestamp": 1767261611000,
+    "toolUses": [
+      {
+        "id": "toolu_agent_fail",
+        "name": "Agent",
+        "agentLaunch": {
+          "type": "builder",
+          "description": "Build it",
+          "runInBackground": true
+        }
+      }
+    ],
+    "messageId": "msg_03",
+    "model": "claude-test-1",
+    "requestedModel": "claude-test-1",
+    "effort": "high",
+    "stopReason": "tool_use",
+    "usage": {
+      "input": 1,
+      "output": 2,
+      "cacheRead": 2100,
+      "cacheCreate": 3
+    }
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261612000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "tool_result",
+    "toolUseId": "toolu_agent_fail",
+    "isError": false,
+    "timestamp": 1767261612000,
+    "agentLaunch": {
+      "agentId": "a-fail-003",
+      "description": "Build it",
+      "resolvedModel": "claude-test-1"
+    }
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261613000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "assistant",
+    "timestamp": 1767261613000,
+    "toolUses": [
+      {
+        "id": "toolu_bash_done",
+        "name": "Bash",
+        "commandCategory": "other"
+      }
+    ],
+    "messageId": "msg_04",
+    "model": "claude-test-1",
+    "requestedModel": "claude-test-1",
+    "effort": "high",
+    "stopReason": "tool_use",
+    "usage": {
+      "input": 1,
+      "output": 4,
+      "cacheRead": 2200,
+      "cacheCreate": 5
+    }
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261614000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "tool_result",
+    "toolUseId": "toolu_bash_done",
+    "isError": false,
+    "timestamp": 1767261614000
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261615000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "turn_end",
+    "timestamp": 1767261615000,
+    "durationMs": 14000,
+    "pendingBackgroundAgentCount": 2
+  },
+  {
+    "kind": "parse_error",
+    "reason": "invalid_json"
+  },
+  {
+    "kind": "ignored",
+    "lineType": "some-future-type"
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261640000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "task_notification",
+    "timestamp": 1767261640000,
+    "taskId": "a-bg-001",
+    "toolUseId": "toolu_agent_bg",
+    "status": "completed"
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261641000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "task_notification",
+    "timestamp": 1767261641000,
+    "taskId": "a-fail-003",
+    "toolUseId": "toolu_agent_fail",
+    "status": "failed"
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261642000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "task_notification",
+    "timestamp": 1767261642000,
+    "taskId": "b-shell-9",
+    "status": "completed"
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261643000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "user_prompt",
+    "isMeta": true,
+    "timestamp": 1767261643000
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261644000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "agent_handback",
+    "timestamp": 1767261644000,
+    "agentId": "a-fg-002",
+    "handback": true
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261645000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "agent_handback",
+    "timestamp": 1767261645000,
+    "agentId": "a-bg-001",
+    "handback": false
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261660000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "user_prompt",
+    "isMeta": false,
+    "timestamp": 1767261660000
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261661000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "assistant",
+    "timestamp": 1767261661000,
+    "toolUses": [
+      {
+        "id": "toolu_bash_pending",
+        "name": "Bash",
+        "commandCategory": "other"
+      },
+      {
+        "id": "toolu_read_pending",
+        "name": "Read",
+        "target": "/home/dev/projects/demo-app/src/index.ts"
+      }
+    ],
+    "messageId": "msg_05",
+    "model": "claude-test-1",
+    "requestedModel": "claude-test-1",
+    "effort": "high",
+    "stopReason": "tool_use",
+    "usage": {
+      "input": 5,
+      "output": 50,
+      "cacheRead": 3000,
+      "cacheCreate": 10
+    }
+  },
+  {
+    "kind": "envelope",
+    "timestamp": 1767261661000,
+    "sessionId": "sess-0001",
+    "cwd": "/home/dev/projects/demo-app",
+    "gitBranch": "main",
+    "version": "2.1.300",
+    "isSidechain": false
+  },
+  {
+    "kind": "assistant",
+    "timestamp": 1767261661000,
+    "toolUses": [],
+    "messageId": "msg_05",
+    "model": "claude-test-1",
+    "requestedModel": "claude-test-1",
+    "effort": "high",
+    "usage": {
+      "input": 5,
+      "output": 50,
+      "cacheRead": 3000,
+      "cacheCreate": 10
+    }
+  },
+  {
+    "kind": "custom_title",
+    "title": "My custom title"
+  }
+]

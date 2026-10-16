@@ -1,0 +1,191 @@
+{
+  "sessionId": "golden",
+  "context": {
+    "used": 3015,
+    "lastMessageId": "msg_05"
+  },
+  "totals": {
+    "input": 37,
+    "output": 91,
+    "cacheRead": 10300,
+    "cacheCreate": 168
+  },
+  "usageByMessageId": {
+    "msg_01": {
+      "input": 10,
+      "output": 5,
+      "cacheRead": 1000,
+      "cacheCreate": 100
+    },
+    "msg_02": {
+      "input": 20,
+      "output": 30,
+      "cacheRead": 2000,
+      "cacheCreate": 50
+    },
+    "msg_03": {
+      "input": 1,
+      "output": 2,
+      "cacheRead": 2100,
+      "cacheCreate": 3
+    },
+    "msg_04": {
+      "input": 1,
+      "output": 4,
+      "cacheRead": 2200,
+      "cacheCreate": 5
+    },
+    "msg_05": {
+      "input": 5,
+      "output": 50,
+      "cacheRead": 3000,
+      "cacheCreate": 10
+    }
+  },
+  "pendingTools": [
+    {
+      "id": "toolu_bash_pending",
+      "name": "Bash",
+      "commandCategory": "other",
+      "startedAt": 1767261661000
+    },
+    {
+      "id": "toolu_read_pending",
+      "name": "Read",
+      "target": "/home/dev/projects/demo-app/src/index.ts",
+      "startedAt": 1767261661000
+    }
+  ],
+  "seenToolUseIds": [
+    "toolu_agent_bg",
+    "toolu_agent_fg",
+    "toolu_agent_fail",
+    "toolu_bash_done",
+    "toolu_bash_pending",
+    "toolu_read_pending"
+  ],
+  "pullRequests": [],
+  "agents": {
+    "a-bg-001": {
+      "context": {
+        "used": 656,
+        "lastMessageId": "sm_03"
+      },
+      "totals": {
+        "input": 6,
+        "output": 36,
+        "cacheRead": 1750,
+        "cacheCreate": 65
+      },
+      "usageByMessageId": {
+        "sm_01": {
+          "input": 3,
+          "output": 7,
+          "cacheRead": 500,
+          "cacheCreate": 40
+        },
+        "sm_02": {
+          "input": 2,
+          "output": 9,
+          "cacheRead": 600,
+          "cacheCreate": 20
+        },
+        "sm_03": {
+          "input": 1,
+          "output": 20,
+          "cacheRead": 650,
+          "cacheCreate": 5
+        }
+      },
+      "pendingTools": [],
+      "seenToolUseIds": [
+        "toolu_s_read",
+        "toolu_s_grep",
+        "toolu_s_hand"
+      ],
+      "pullRequests": [],
+      "type": "explorer",
+      "description": "Scan repo",
+      "isBackground": true,
+      "status": "completed",
+      "agentId": "a-bg-001",
+      "toolUseId": "toolu_agent_bg",
+      "model": "claude-haiku-test",
+      "startedAt": 1767261602000,
+      "finishedAt": 1767261640000,
+      "lastActivityAt": 1767261621000
+    },
+    "a-fg-002": {
+      "context": {
+        "used": 0
+      },
+      "totals": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheCreate": 0
+      },
+      "usageByMessageId": {},
+      "pendingTools": [],
+      "seenToolUseIds": [],
+      "pullRequests": [],
+      "type": "reviewer",
+      "description": "Review diff",
+      "isBackground": false,
+      "status": "completed",
+      "toolUseId": "toolu_agent_fg",
+      "startedAt": 1767261604000,
+      "agentId": "a-fg-002",
+      "model": "claude-test-1",
+      "handbackReceivedAt": 1767261644000,
+      "finishedAt": 1767261644000
+    },
+    "a-fail-003": {
+      "context": {
+        "used": 0
+      },
+      "totals": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheCreate": 0
+      },
+      "usageByMessageId": {},
+      "pendingTools": [],
+      "seenToolUseIds": [],
+      "pullRequests": [],
+      "type": "builder",
+      "description": "Build it",
+      "isBackground": true,
+      "status": "failed",
+      "toolUseId": "toolu_agent_fail",
+      "startedAt": 1767261611000,
+      "agentId": "a-fail-003",
+      "model": "claude-test-1",
+      "finishedAt": 1767261641000,
+      "failureReason": "failed"
+    }
+  },
+  "activityHistogram": {
+    "1767261600000": 14,
+    "1767261660000": 3
+  },
+  "parseErrors": 1,
+  "ignored": 3,
+  "lastActivityAt": 1767261661000,
+  "cwd": "/home/dev/projects/demo-app",
+  "projectName": "demo-app",
+  "gitBranch": "main",
+  "version": "2.1.300",
+  "model": {
+    "id": "claude-test-1",
+    "name": "Claude Test 1"
+  },
+  "lastUserPromptAt": 1767261660000,
+  "aiTitle": "Demo title refactor",
+  "title": "My custom title",
+  "titleSource": "custom",
+  "effort": "high",
+  "pendingBackgroundAgents": 2,
+  "customTitle": "My custom title"
+}

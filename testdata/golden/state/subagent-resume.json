@@ -1,0 +1,86 @@
+{
+  "sessionId": "golden",
+  "context": {
+    "used": 0
+  },
+  "totals": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheCreate": 0
+  },
+  "usageByMessageId": {},
+  "pendingTools": [],
+  "seenToolUseIds": [],
+  "pullRequests": [],
+  "agents": {
+    "a-res-001": {
+      "context": {
+        "used": 112,
+        "lastMessageId": "am_5"
+      },
+      "totals": {
+        "input": 10,
+        "output": 25,
+        "cacheRead": 500,
+        "cacheCreate": 50
+      },
+      "usageByMessageId": {
+        "am_1": {
+          "input": 2,
+          "output": 5,
+          "cacheRead": 100,
+          "cacheCreate": 10
+        },
+        "am_2": {
+          "input": 2,
+          "output": 5,
+          "cacheRead": 100,
+          "cacheCreate": 10
+        },
+        "am_3": {
+          "input": 2,
+          "output": 5,
+          "cacheRead": 100,
+          "cacheCreate": 10
+        },
+        "am_4": {
+          "input": 2,
+          "output": 5,
+          "cacheRead": 100,
+          "cacheCreate": 10
+        },
+        "am_5": {
+          "input": 2,
+          "output": 5,
+          "cacheRead": 100,
+          "cacheCreate": 10
+        }
+      },
+      "pendingTools": [],
+      "seenToolUseIds": [
+        "toolu_a_bash",
+        "toolu_hb_1",
+        "toolu_a_read",
+        "toolu_hb_2"
+      ],
+      "pullRequests": [],
+      "type": "unknown",
+      "description": "",
+      "isBackground": false,
+      "status": "handed_back",
+      "agentId": "a-res-001",
+      "lastActivityAt": 1767265269500,
+      "startedAt": 1767265201000,
+      "model": "claude-test-1",
+      "finishedAt": 1767265269000
+    }
+  },
+  "activityHistogram": {
+    "1767265200000": 4,
+    "1767265230000": 3,
+    "1767265260000": 2
+  },
+  "parseErrors": 0,
+  "ignored": 0
+}
