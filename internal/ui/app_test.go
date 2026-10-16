@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"reflect"
 	"regexp"
 	"slices"
@@ -13,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/danielfnfaria/agtop/internal/closer"
 	"github.com/danielfnfaria/agtop/internal/discovery"
 	"github.com/danielfnfaria/agtop/internal/domain"
 	"github.com/danielfnfaria/agtop/internal/store"
@@ -477,5 +479,167 @@ func TestPendingPredicate(t *testing.T) {
 				t.Errorf("pending() = %v, want %v", got, c.want)
 			}
 		})
+	}
+}
+
+// closeApp builds the app for the close flow: one session with a known title and pid, and a
+// fake closer that never signals.
+func closeApp() (*App, *fakeCloser) {
+	s := session("claude:s1", func(s *store.SessionView) {
+		s.DisplayTitle, s.PID = "My task", 1234
+	})
+	fc := &fakeCloser{}
+	o := testOptions(newFakeStore(snapshot([]*store.SessionView{s}, profiles)), profiles)
+	o.Closer = fc
+	return newApp(o, 100, 30), fc
+}
+
+func TestClosePrompt(t *testing.T) {
+	a, fc := closeApp()
+	press(a, "down", "x")
+	mustContain(t, screen(a), `close "My task" (pid 1234)? y/Enter confirm, Esc/n cancel`)
+	if len(fc.called) != 0 {
+		t.Fatalf("closer called before confirmation: %+v", fc.called)
+	}
+}
+
+func TestCloseConfirm(t *testing.T) {
+	for _, confirmKey := range []string{"y", "enter"} {
+		t.Run(confirmKey, func(t *testing.T) {
+			a, fc := closeApp()
+			press(a, "down", "x", confirmKey)
+			if len(fc.called) != 1 {
+				t.Fatalf("closer called %d times", len(fc.called))
+			}
+			want := closer.Card{ProfileDir: "/tmp/a/.claude", PID: 1234, SessionID: "claude:s1"}
+			if fc.called[0] != want {
+				t.Errorf("card = %+v, want %+v", fc.called[0], want)
+			}
+			mustContain(t, screen(a), `sent SIGTERM to "My task" (pid 1234)`)
+		})
+	}
+}
+
+func TestCloseCancel(t *testing.T) {
+	for _, cancelKey := range []string{"esc", "n"} {
+		t.Run(cancelKey, func(t *testing.T) {
+			a, fc := closeApp()
+			press(a, "down", "x", cancelKey)
+			if len(fc.called) != 0 {
+				t.Fatalf("closer called on cancel: %+v", fc.called)
+			}
+			f := screen(a)
+			mustNotContain(t, f, "close ")
+			mustContain(t, f, "My task")
+		})
+	}
+}
+
+func TestCloseIgnoresOtherKeysWhileConfirming(t *testing.T) {
+	a, fc := closeApp()
+	press(a, "down", "x", "down", "z", "tab")
+	// Still confirming: the prompt is up and nothing was closed.
+	mustContain(t, screen(a), `close "My task" (pid 1234)?`)
+	if len(fc.called) != 0 {
+		t.Fatalf("closer called by an unrelated key: %+v", fc.called)
+	}
+}
+
+func TestCloseErrorShowsNotice(t *testing.T) {
+	a, fc := closeApp()
+	fc.err = errors.New("process is not alive")
+	press(a, "down", "x", "y")
+	mustContain(t, screen(a), `cannot close "My task": process is not alive`)
+}
+
+func TestCloseWithoutSelectionDoesNothing(t *testing.T) {
+	a, fc := closeApp()
+	press(a, "x") // nothing selected yet
+	if len(fc.called) != 0 {
+		t.Fatalf("closer called: %+v", fc.called)
+	}
+	mustNotContain(t, screen(a), "close ")
+}
+
+func TestCloseUnavailableShowsNotice(t *testing.T) {
+	s := session("claude:s1", func(s *store.SessionView) { s.DisplayTitle = "My task" })
+	a := newApp(testOptions(newFakeStore(snapshot([]*store.SessionView{s}, profiles)), profiles), 100, 30)
+	press(a, "down", "x", "y")
+	mustContain(t, screen(a), `cannot close "My task": close is not available`)
+}
+
+func TestCloseCancelsWhenIdentityChanges(t *testing.T) {
+	first := session("claude:s1", func(s *store.SessionView) {
+		s.DisplayTitle, s.PID = "My task", 1234
+	})
+	st := newFakeStore(snapshot([]*store.SessionView{first}, profiles))
+	fc := &fakeCloser{}
+	o := testOptions(st, profiles)
+	o.Closer = fc
+	a := newApp(o, 100, 30)
+	press(a, "down", "x")
+	if a.nav.Close.Key == "" {
+		t.Fatal("no pending confirmation")
+	}
+	// Same key, different identity under the cursor (title and pid changed).
+	changed := session("claude:s1", func(s *store.SessionView) {
+		s.DisplayTitle, s.PID = "Changed task", 9999
+	})
+	st.set(snapshot([]*store.SessionView{changed}, profiles))
+	a.Update(snapshotMsg{snap: st.Snapshot()})
+	if a.nav.Close.Key != "" {
+		t.Fatalf("confirmation survived an identity change: %+v", a.nav.Close)
+	}
+	mustContain(t, screen(a), "close canceled")
+	press(a, "y")
+	if len(fc.called) != 0 {
+		t.Fatalf("closer called after an identity change: %+v", fc.called)
+	}
+}
+
+func TestCloseCancelsWhenSessionLeaves(t *testing.T) {
+	s := session("claude:s1", func(s *store.SessionView) { s.DisplayTitle, s.PID = "My task", 1234 })
+	st := newFakeStore(snapshot([]*store.SessionView{s}, profiles))
+	fc := &fakeCloser{}
+	o := testOptions(st, profiles)
+	o.Closer = fc
+	a := newApp(o, 100, 30)
+	press(a, "down", "x")
+	st.set(snapshot([]*store.SessionView{}, profiles))
+	a.Update(snapshotMsg{snap: st.Snapshot()})
+	if a.nav.Close.Key != "" {
+		t.Fatalf("confirmation survived the session leaving: %+v", a.nav.Close)
+	}
+	press(a, "y")
+	if len(fc.called) != 0 {
+		t.Fatalf("closer called after the session left: %+v", fc.called)
+	}
+}
+
+func TestCloseBlocksOnSmallTerminal(t *testing.T) {
+	a, fc := closeApp()
+	press(a, "down", "x")
+	if a.nav.Close.Key == "" {
+		t.Fatal("no pending confirmation")
+	}
+	a.Update(tea.WindowSizeMsg{Width: 30, Height: 10})
+	if a.nav.Close.Key != "" {
+		t.Fatalf("confirmation survived a small terminal: %+v", a.nav.Close)
+	}
+	press(a, "y")
+	if len(fc.called) != 0 {
+		t.Fatalf("closer called on a small terminal: %+v", fc.called)
+	}
+}
+
+func TestCloseNotStartedOnSmallTerminal(t *testing.T) {
+	a, fc := closeApp()
+	a.Update(tea.WindowSizeMsg{Width: 30, Height: 10})
+	press(a, "down", "x")
+	if a.nav.Close.Key != "" {
+		t.Fatalf("confirmation started on a small terminal: %+v", a.nav.Close)
+	}
+	if len(fc.called) != 0 {
+		t.Fatalf("closer called: %+v", fc.called)
 	}
 }
