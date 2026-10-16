@@ -3,11 +3,11 @@
 // per profile; it never writes the database or its WAL and never checkpoints, though SQLite may
 // create the shared-memory -shm file, as any WAL reader does) and queries for metadata only.
 //
-// A root session (no parent, not archived) is live while an opencode process runs with the
-// session's directory as its cwd and the session was touched since that process started: the
-// TUI is one process per project directory, and there is no registry to say which session it
-// shows. The pid of the session is that process (the newest, if several). A permission request
-// is not persisted, so "waiting" is never shown.
+// The opencode TUI is one process showing one session, in its project directory, and there is
+// no registry to say which: each live opencode process is mapped to the most recently touched
+// root session (no parent, not archived) whose directory is the process cwd and whose last touch
+// is not before the process start. Newest process first, each takes the newest session not
+// claimed yet. A permission request is not persisted, so "waiting" is never shown.
 //
 // References handed to the store are opaque strings: "opencode:<sessionID>" is a transcript,
 // "opencode:<sessionID>/agents" the agents of a session and "opencode:<sessionID>/meta" the
@@ -15,7 +15,9 @@
 package opencode
 
 import (
+	"cmp"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -35,9 +37,6 @@ import (
 const (
 	// ProcessName is the executable (and process name) of the opencode TUI.
 	ProcessName = "opencode"
-	// startSlackMs: a session touched up to this long before its process started still belongs
-	// to it (the process clock and the database clock are not the same instant).
-	startSlackMs = 5_000
 	// CodeProcesses: the processes could not be listed.
 	CodeProcesses = "PROC_LIST"
 
@@ -217,8 +216,14 @@ func resolveDir(dir string) string {
 	return dir
 }
 
-// discoverProfile is the live sessions of a profile: the root sessions whose directory is the
-// cwd of a running process and that were touched since the process started.
+// candidate is a root session of a directory that has a process, with its activity.
+type candidate struct {
+	rootRow
+	activityRow
+}
+
+// discoverProfile is the live sessions of a profile: one per running process, the most recently
+// touched root session of the process cwd that was touched since the process started.
 func (s *Source) discoverProfile(profile config.ProfileDir, byCwd map[string][]proc.Process) ([]discovery.DiscoveredSession, error) {
 	db, err := s.dbFor(profile)
 	if err != nil {
@@ -233,7 +238,7 @@ func (s *Source) discoverProfile(profile config.ProfileDir, byCwd map[string][]p
 		return nil, err
 	}
 	resolved := map[string]string{}
-	var live []discovery.DiscoveredSession
+	byDir := map[string][]candidate{}
 	for _, r := range roots {
 		if r.ID == "" || r.Directory == "" {
 			continue
@@ -243,50 +248,62 @@ func (s *Source) discoverProfile(profile config.ProfileDir, byCwd map[string][]p
 			dir = resolveDir(r.Directory)
 			resolved[r.Directory] = dir
 		}
-		group := byCwd[dir]
-		if len(group) == 0 {
+		if len(byCwd[dir]) == 0 {
 			continue
 		}
 		activity, err := selectActivity(conn, r)
 		if err != nil {
 			return nil, err
 		}
-		// The newest process is the session's; any of them started before the last touch
-		// vouches for it.
-		owner := group[0]
-		oldest := group[len(group)-1]
-		if !oldest.Start.IsZero() && activity.LastActivity < oldest.Start.UnixMilli()-startSlackMs {
-			continue
+		byDir[dir] = append(byDir[dir], candidate{r, activity})
+	}
+	var live []discovery.DiscoveredSession
+	for _, dir := range slices.Sorted(maps.Keys(byDir)) {
+		sessions := byDir[dir]
+		slices.SortStableFunc(sessions, func(a, b candidate) int { return cmp.Compare(b.LastActivity, a.LastActivity) })
+		// Processes newest first: each takes the newest session left that it may have touched.
+		for _, p := range byCwd[dir] {
+			var start int64
+			if !p.Start.IsZero() {
+				start = p.Start.UnixMilli()
+			}
+			i := slices.IndexFunc(sessions, func(c candidate) bool { return c.LastActivity >= start })
+			if i < 0 {
+				continue
+			}
+			c := sessions[i]
+			sessions = slices.Delete(sessions, i, i+1)
+			live = append(live, s.discovered(profile, db, c, p, start))
 		}
-		var processStart int64
-		if !owner.Start.IsZero() {
-			processStart = owner.Start.UnixMilli()
-		}
-		state := discovery.ActivityIdle
-		if activity.InProgress {
-			state = discovery.ActivityBusy
-		}
-		id := domain.Sanitize(r.ID, idMax)
-		s.remember(r.ID, db, "")
-		live = append(live, discovery.DiscoveredSession{
-			LiveSessionRecord: discovery.LiveSessionRecord{
-				Profile:          profile,
-				PID:              owner.PID,
-				SessionID:        id,
-				Cwd:              domain.Sanitize(r.Directory, pathMax),
-				Version:          domain.Sanitize(r.Version, nameMax),
-				Name:             domain.Sanitize(r.Title, textMax),
-				Activity:         state,
-				UpdatedAt:        activity.LastActivity,
-				StartedAt:        r.TimeCreated,
-				ProcessStartedAt: processStart,
-				Alive:            true,
-			},
-			Key:   discovery.SessionKey(profile, id),
-			Files: discovery.SessionFiles{TranscriptPath: transcriptRef(r.ID), SubagentsDir: agentsRef(r.ID)},
-		})
 	}
 	return live, nil
+}
+
+// discovered is the session c as shown for the process p that owns it.
+func (s *Source) discovered(profile config.ProfileDir, db *profileDB, c candidate, p proc.Process, start int64) discovery.DiscoveredSession {
+	state := discovery.ActivityIdle
+	if c.InProgress {
+		state = discovery.ActivityBusy
+	}
+	id := domain.Sanitize(c.ID, idMax)
+	s.remember(c.ID, db, "")
+	return discovery.DiscoveredSession{
+		LiveSessionRecord: discovery.LiveSessionRecord{
+			Profile:          profile,
+			PID:              p.PID,
+			SessionID:        id,
+			Cwd:              domain.Sanitize(c.Directory, pathMax),
+			Version:          domain.Sanitize(c.Version, nameMax),
+			Name:             domain.Sanitize(c.Title, textMax),
+			Activity:         state,
+			UpdatedAt:        c.LastActivity,
+			StartedAt:        c.TimeCreated,
+			ProcessStartedAt: start,
+			Alive:            true,
+		},
+		Key:   discovery.SessionKey(profile, id),
+		Files: discovery.SessionFiles{TranscriptPath: transcriptRef(c.ID), SubagentsDir: agentsRef(c.ID)},
+	}
 }
 
 func transcriptRef(sessionID string) string { return refPrefix + sessionID }

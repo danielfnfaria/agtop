@@ -95,40 +95,29 @@ func kinds(events []domain.TranscriptEvent) []string {
 
 func TestDiscover(t *testing.T) {
 	f := newFixture(t)
-	// Idle for an hour, but its process runs: live.
+	// Idle for an hour, its process runs and nothing newer in the directory: live. (The others of
+	// the directory are older: each process shows one session.)
 	f.addSession(sessionSpec{ID: "ses_recent", Title: "Recent work", Model: model, Created: now - hour, Updated: now - hour})
 	f.addMessage("ses_recent", "msg_r1", now-hour, now-hour, userData(now-hour, model))
 	f.addPart("ses_recent", "msg_r1", "prt_r1", now-50*minute, now-50*minute, textData("hello"))
-	// Untouched since the process started: not live (an older session of the same directory).
+	// Untouched since the process started: never live.
 	f.addSession(sessionSpec{ID: "ses_old", Title: "Old", Model: model, Created: now - 3*hour, Updated: now - 3*hour})
 	f.addMessage("ses_old", "msg_o1", now-3*hour, now-3*hour, userData(now-3*hour, model))
-	// Busy: an assistant message without time.completed.
-	f.addSession(sessionSpec{ID: "ses_busy", Title: "Busy", Model: model, Created: now - hour, Updated: now - 20*minute})
-	f.addMessage("ses_busy", "msg_b1", now-20*minute, now-20*minute, assistantData("ses_busy", model, now-20*minute, 0, "", tokens{}))
-	// Busy by a running tool, with an old session row (touched after the process start by the part).
-	f.addSession(sessionSpec{ID: "ses_tool", Title: "Tool", Model: model, Created: now - 5*hour, Updated: now - 5*hour})
-	f.addMessage("ses_tool", "msg_t1", now-5*hour, now-5*hour, assistantData("ses_tool", model, now-5*hour, now-5*hour+1, "tool-calls", tokens{}))
-	f.addPart("ses_tool", "msg_t1", "prt_t1", now-30*minute, now-30*minute,
-		toolData("bash", "call_t1", "running", map[string]any{"command": "go test ./..."}, nil, "", now-30*minute, 0))
-	// In progress but from before the process: not live (the process gate, no idle rule).
-	f.addSession(sessionSpec{ID: "ses_stuck", Title: "Stuck", Model: model, Created: now - 4*hour, Updated: now - 4*hour})
-	f.addMessage("ses_stuck", "msg_s1", now-4*hour, now-4*hour, assistantData("ses_stuck", model, now-4*hour, 0, "", tokens{}))
+	// Touched after the start, but older than ses_recent: not the process's session.
+	f.addSession(sessionSpec{ID: "ses_prev", Title: "Previous", Model: model, Created: now - 90*minute, Updated: now - 70*minute})
 	// Archived: never live.
 	f.addSession(sessionSpec{ID: "ses_arch", Title: "Archived", Model: model, Created: now - minute, Updated: now - minute, Archived: now - minute})
 	// Another directory without a process: not live.
 	f.addSession(sessionSpec{ID: "ses_other", Title: "Other", Dir: "/home/u/other", Model: model, Created: now - minute, Updated: now - minute})
-	// A child session is not a root, and its activity keeps the parent live.
-	f.addSession(sessionSpec{ID: "ses_parent", Title: "Parent", Model: model, Created: now - 3*hour, Updated: now - 3*hour})
-	f.addSession(sessionSpec{ID: "ses_child", Parent: "ses_parent", Title: "Scan (@explore subagent)", Agent: "explore", Model: model, Created: now - 5*minute, Updated: now - 5*minute})
+	// A child session is not a root, and its activity counts as its parent's (in a third
+	// directory with its own process).
+	f.addSession(sessionSpec{ID: "ses_parent", Title: "Parent", Dir: "/home/u/third", Model: model, Created: now - 3*hour, Updated: now - 3*hour})
+	f.addSession(sessionSpec{ID: "ses_child", Parent: "ses_parent", Dir: "/home/u/third", Title: "Scan (@explore subagent)", Agent: "explore", Model: model, Created: now - 5*minute, Updated: now - 5*minute})
 
-	s := newSource(t, f)
+	s := newSourceWith(t, f, []proc.Process{procAt(55813, "/home/u/proj", procStart), procAt(55900, "/home/u/third", procStart)})
 	pd := discoverOne(t, s, f)
-	want := map[string]discovery.Activity{
-		"ses_recent": discovery.ActivityIdle, "ses_busy": discovery.ActivityBusy,
-		"ses_tool": discovery.ActivityBusy, "ses_parent": discovery.ActivityIdle,
-	}
-	if got := liveIDs(pd); len(got) != len(want) || got["ses_recent"] != want["ses_recent"] || got["ses_busy"] != want["ses_busy"] ||
-		got["ses_tool"] != want["ses_tool"] || got["ses_parent"] != want["ses_parent"] {
+	want := map[string]discovery.Activity{"ses_recent": discovery.ActivityIdle, "ses_parent": discovery.ActivityIdle}
+	if got := liveIDs(pd); len(got) != len(want) || got["ses_recent"] != want["ses_recent"] || got["ses_parent"] != want["ses_parent"] {
 		t.Errorf("live = %v, want %v", got, want)
 	}
 	if len(pd.Diagnostics.Issues) != 0 || len(pd.Dead) != 0 {
@@ -186,19 +175,53 @@ func TestDiscoverByProcess(t *testing.T) {
 			t.Errorf("without database: %v %+v", err, res)
 		}
 	})
-	t.Run("two processes in the same directory: the union, pid of the newest", func(t *testing.T) {
+	t.Run("one session per process", func(t *testing.T) {
+		s := newSourceWith(t, f, []proc.Process{procAt(100, "/home/u/proj", procStart)})
+		if got := liveIDs(discoverOne(t, s, f)); len(got) != 1 || got["ses_b"] == "" {
+			t.Errorf("live = %v, want the most recently touched", got)
+		}
+	})
+	t.Run("busy and in progress", func(t *testing.T) {
+		f.addMessage("ses_b", "msg_b1", now-9*minute, now-9*minute, assistantData("ses_b", model, now-9*minute, 0, "", tokens{}))
+		s := newSourceWith(t, f, []proc.Process{procAt(100, "/home/u/proj", procStart)})
+		if got := liveIDs(discoverOne(t, s, f)); got["ses_b"] != discovery.ActivityBusy {
+			t.Errorf("live = %v", got)
+		}
+	})
+	t.Run("a session touched before the process start is never its session, without slack", func(t *testing.T) {
+		s := newSourceWith(t, f, []proc.Process{procAt(100, "/home/u/proj", time.UnixMilli(now-9*minute+1).UTC())})
+		if got := liveIDs(discoverOne(t, s, f)); len(got) != 0 {
+			t.Errorf("live = %v", got)
+		}
+		exact := newSourceWith(t, f, []proc.Process{procAt(100, "/home/u/proj", time.UnixMilli(now-9*minute).UTC())})
+		if got := liveIDs(discoverOne(t, exact, f)); len(got) != 1 || got["ses_b"] == "" {
+			t.Errorf("touched at the start: %v", got)
+		}
+	})
+	t.Run("two processes in the same directory: each takes a session, newest process first", func(t *testing.T) {
 		older, newer := procAt(100, "/home/u/proj", time.UnixMilli(now-2*hour).UTC()), procAt(200, "/home/u/proj", time.UnixMilli(now-30*minute).UTC())
 		s := newSourceWith(t, f, []proc.Process{older, newer})
 		pd := discoverOne(t, s, f)
-		got := liveIDs(pd)
-		if len(got) != 2 || got["ses_a"] == "" || got["ses_b"] == "" {
-			t.Errorf("live = %v", got)
-		}
+		pids := map[string]int{}
 		for _, d := range pd.Live {
-			if d.PID != 200 || d.ProcessStartedAt != now-30*minute {
-				t.Errorf("%s: pid %d start %d, want the newest process", d.SessionID, d.PID, d.ProcessStartedAt)
-			}
+			pids[d.SessionID] = d.PID
 		}
+		if len(pids) != 2 || pids["ses_b"] != 200 || pids["ses_a"] != 100 {
+			t.Errorf("pids = %v", pids)
+		}
+		// A late write to the older session after the newer process started does not steal
+		// the newer process's session: the newest touch wins.
+		f.addMessage("ses_a", "msg_a_late", now-20*minute, now-20*minute, userData(now-20*minute, model))
+		pd = discoverOne(t, s, f)
+		pids = map[string]int{}
+		for _, d := range pd.Live {
+			pids[d.SessionID] = d.PID
+		}
+		if len(pids) != 2 || pids["ses_b"] != 200 || pids["ses_a"] != 100 {
+			t.Errorf("after a late write: %v", pids)
+		}
+		f.deleteSession("ses_a")
+		f.addSession(sessionSpec{ID: "ses_a", Title: "A", Model: model, Created: now - hour, Updated: now - hour})
 	})
 	t.Run("a process per directory, with a symlinked cwd", func(t *testing.T) {
 		real := filepath.Join(f.dir, "real")
@@ -215,13 +238,14 @@ func TestDiscoverByProcess(t *testing.T) {
 		if len(got) != 2 || got["ses_c"] == "" || got["ses_link"] == "" {
 			t.Errorf("live = %v", got)
 		}
+		f.deleteSession("ses_link")
 	})
 	t.Run("a process without a cwd or with an unknown start", func(t *testing.T) {
 		blind := proc.Process{PID: 500, Name: "opencode"}
 		noStart := proc.Process{PID: 600, Name: "opencode", Cwd: "/home/u/proj"}
 		s := newSourceWith(t, f, []proc.Process{blind, noStart})
 		pd := discoverOne(t, s, f)
-		if got := liveIDs(pd); len(got) != 2 {
+		if got := liveIDs(pd); len(got) != 1 || got["ses_b"] == "" {
 			t.Errorf("live = %v", got)
 		}
 		for _, d := range pd.Live {
@@ -234,7 +258,7 @@ func TestDiscoverByProcess(t *testing.T) {
 		var procs []proc.Process
 		s := newSourceListing(t, f, func() ([]proc.Process, error) { return procs, nil })
 		procs = []proc.Process{procAt(700, "/home/u/proj", procStart)}
-		if got := liveIDs(discoverOne(t, s, f)); len(got) != 2 {
+		if got := liveIDs(discoverOne(t, s, f)); len(got) != 1 {
 			t.Errorf("running: %v", got)
 		}
 		procs = nil
