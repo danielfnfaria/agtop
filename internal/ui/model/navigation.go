@@ -36,7 +36,11 @@ type ClosePrompt struct {
 	PID       int
 	SessionID string
 	StartedAt int64
-	Title     string
+	// Provider and ProcessStart go to the closer: a provider without a registry record is
+	// validated by its process start.
+	Provider     string
+	ProcessStart int64
+	Title        string
 }
 
 // NavState is the navigation state. Empty strings mean "none" (keys are never empty). It is

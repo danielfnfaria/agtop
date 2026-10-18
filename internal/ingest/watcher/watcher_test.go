@@ -453,3 +453,30 @@ func TestSessionWatcherSeesAppendsAndRemovalsOfExistingAgentFiles(t *testing.T) 
 	mustWrite(t, meta, "{}")
 	wait(Event{Op: Add, Path: meta})
 }
+
+func TestFilesWatcherDebouncesNamedFiles(t *testing.T) {
+	root := tmpDir(t)
+	db := filepath.Join(root, "opencode.db")
+	wal := filepath.Join(root, "opencode.db-wal")
+	mustWrite(t, db, "x")
+	w := openWatcher(t, FilesTarget(root, "opencode.db", "opencode.db-wal"))
+	c := collect(w)
+	mustWrite(t, filepath.Join(root, "other.json"), "{}")
+	for i := 0; i < 5; i++ {
+		mustWrite(t, wal, fmt.Sprintf("w%d", i))
+	}
+	waitNudging(t, wal, func() bool { return c.has(root) })
+	time.Sleep(2 * FilesDebounce)
+	c.mu.Lock()
+	n := len(c.seen)
+	c.mu.Unlock()
+	if n > 2 {
+		t.Errorf("burst reported %d times, want one (or two)", n)
+	}
+	if other := c.others(root); len(other) != 0 {
+		t.Errorf("events on other paths: %v", other)
+	}
+	if !FilesTarget(root, "a", "b").watchesName("b") || FilesTarget(root, "a").watchesName("c") {
+		t.Error("watchesName")
+	}
+}

@@ -25,7 +25,8 @@ An opencode profile is a table instead of a path; dir is optional (default
 $XDG_DATA_HOME/opencode, else ~/.local/share/opencode) and must hold opencode.db:
   oc = { provider = "opencode" }
   oc2 = { provider = "opencode", dir = "~/other/opencode" }
-opencode sessions are not read yet: such a profile is listed with an error.
+opencode sessions are read from that database (read-only) while their opencode
+process runs in the session's directory; setup does not apply.
 
 Appearance (all optional, independent of [profiles]; the defaults are today's
 look). Colors are chalk names (black, red, green, yellow, blue, magenta, cyan,

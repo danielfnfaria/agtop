@@ -3,6 +3,8 @@
 package proc
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -70,5 +72,46 @@ func TestTicksToTimeKeepsPrecision(t *testing.T) {
 	want := time.Unix(1_700_000_000, 330_000_000).UTC()
 	if !got.Equal(want) {
 		t.Errorf("ticksToTime = %v, want %v", got, want)
+	}
+}
+
+func TestListProc(t *testing.T) {
+	root := t.TempDir()
+	write := func(p, text string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(filepath.Join(root, "stat"), "cpu 1 2 3\nbtime 1700000000\n")
+	cwd := filepath.Join(root, "work")
+	exe := filepath.Join(root, "opencode")
+	write(filepath.Join(cwd, ".keep"), "")
+	write(exe, "")
+	// 55813: opencode, started 100 ticks (1 s) after boot.
+	write(filepath.Join(root, "55813", "comm"), "opencode\n")
+	write(filepath.Join(root, "55813", "stat"), "55813 (opencode) S 1 55813 55813 0 -1 4194304 1 0 0 0 1 1 0 0 20 0 1 0 100 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0")
+	if err := os.Symlink(cwd, filepath.Join(root, "55813", "cwd")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(exe, filepath.Join(root, "55813", "exe")); err != nil {
+		t.Fatal(err)
+	}
+	// 42: another program; "self" and "sys": not pids.
+	write(filepath.Join(root, "42", "comm"), "node\n")
+	write(filepath.Join(root, "self", "comm"), "opencode\n")
+	got, err := listProc(root, "opencode")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Process{{PID: 55813, Name: "opencode", Exe: exe, Cwd: cwd, Start: time.Unix(1700000001, 0).UTC()}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+	if _, err := listProc(filepath.Join(root, "missing"), "opencode"); err == nil {
+		t.Error("a missing root must fail")
 	}
 }

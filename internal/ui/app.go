@@ -223,12 +223,14 @@ func (a *App) requestClose() {
 		return
 	}
 	a.nav.Close = model.ClosePrompt{
-		Key:       s.Key,
-		Profile:   s.ProfileLabel,
-		PID:       s.PID,
-		SessionID: s.SessionID,
-		StartedAt: s.StartedAt,
-		Title:     s.DisplayTitle,
+		Key:          s.Key,
+		Profile:      s.ProfileLabel,
+		PID:          s.PID,
+		SessionID:    s.SessionID,
+		StartedAt:    s.StartedAt,
+		Provider:     string(s.Provider),
+		ProcessStart: s.ProcessStart,
+		Title:        s.DisplayTitle,
 	}
 	a.nav.Notice = ""
 }
@@ -273,10 +275,12 @@ func (a *App) closeCard(p model.ClosePrompt) (closer.Card, bool) {
 	for _, pr := range a.profiles {
 		if pr.Label == p.Profile {
 			return closer.Card{
-				ProfileDir: pr.Dir,
-				PID:        p.PID,
-				SessionID:  p.SessionID,
-				StartedAt:  p.StartedAt,
+				ProfileDir:   pr.Dir,
+				PID:          p.PID,
+				SessionID:    p.SessionID,
+				StartedAt:    p.StartedAt,
+				Provider:     domain.ProviderID(p.Provider),
+				ProcessStart: p.ProcessStart,
 			}, true
 		}
 	}
@@ -308,6 +312,7 @@ func (a *App) recheckClose() {
 		s.PID != a.nav.Close.PID ||
 		s.SessionID != a.nav.Close.SessionID ||
 		s.StartedAt != a.nav.Close.StartedAt ||
+		s.ProcessStart != a.nav.Close.ProcessStart ||
 		s.DisplayTitle != a.nav.Close.Title {
 		a.nav.Close = model.ClosePrompt{}
 		a.nav.Notice = "the session changed; close canceled"

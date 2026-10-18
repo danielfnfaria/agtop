@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/danielfnfaria/agtop/internal/domain"
 	"github.com/danielfnfaria/agtop/internal/proc"
 )
 
@@ -320,5 +321,68 @@ func TestCloseSignalsOnlySIGTERM(t *testing.T) {
 	}
 	if d.sig.sent[0].sig != syscall.SIGTERM {
 		t.Errorf("sig = %v, want SIGTERM", d.sig.sent[0].sig)
+	}
+}
+
+// opencode sessions have no registry record: the identity is pid, process start and executable.
+func opencodeCard(mut ...func(*Card)) Card {
+	c := Card{ProfileDir: "/tmp/opencode", PID: 55813, SessionID: "ses_1", Provider: domain.Opencode, ProcessStart: testStart}
+	for _, m := range mut {
+		m(&c)
+	}
+	return c
+}
+
+func opencodeDeps(c Card, info proc.Info) *deps {
+	d := &deps{self: Process{PID: 1_000_000, PPID: 999_999, UID: testUID}}
+	d.proc = fakeProc{infos: map[int]proc.Info{c.PID: info}}
+	return d
+}
+
+func TestCloseOpencodeByProcessIdentity(t *testing.T) {
+	c := opencodeCard()
+	info := proc.Info{PID: c.PID, Name: "opencode", Args: []string{"/home/u/.opencode/bin/opencode"}, Owner: testUID, Start: time.UnixMilli(testStart + 2_000).UTC()}
+	d := opencodeDeps(c, info)
+	if err := d.closer().Close(c); err != nil {
+		t.Fatalf("Close = %v", err)
+	}
+	if len(d.sig.sent) != 1 || d.sig.sent[0] != (sent{c.PID, syscall.SIGTERM}) || !d.sig.want.Start.Equal(info.Start) {
+		t.Errorf("sent = %+v, want %+v", d.sig.sent, d.sig.want)
+	}
+	// The name may be truncated or different as long as the executable is opencode.
+	byExe := opencodeDeps(c, proc.Info{PID: c.PID, Name: "node", Args: []string{"/opt/bin/opencode", "--port", "1"}, Owner: testUID, Start: info.Start})
+	if err := byExe.closer().Close(c); err != nil || len(byExe.sig.sent) != 1 {
+		t.Errorf("by exe: %v, sent %+v", err, byExe.sig.sent)
+	}
+}
+
+func TestCloseOpencodeNeverSignalsOnError(t *testing.T) {
+	good := proc.Info{PID: 55813, Name: "opencode", Owner: testUID, Start: time.UnixMilli(testStart).UTC()}
+	tests := []struct {
+		name string
+		card Card
+		info proc.Info
+		want error
+	}{
+		{"process start absent", opencodeCard(func(c *Card) { c.ProcessStart = 0 }), good, ErrStartMismatch},
+		{"process gone", opencodeCard(func(c *Card) { c.PID = 777 }), good, ErrNotAlive},
+		{"other user", opencodeCard(), proc.Info{PID: 55813, Name: "opencode", Owner: 0, Start: good.Start}, ErrNotOwner},
+		{"not opencode", opencodeCard(), proc.Info{PID: 55813, Name: "bash", Args: []string{"bash", "opencode"}, Owner: testUID, Start: good.Start}, ErrNotOpencode},
+		{"start unknown", opencodeCard(), proc.Info{PID: 55813, Name: "opencode", Owner: testUID}, ErrStartMismatch},
+		{"reused pid", opencodeCard(), proc.Info{PID: 55813, Name: "opencode", Owner: testUID, Start: time.UnixMilli(testStart + 60_000).UTC()}, ErrStartMismatch},
+		{"agtop itself", opencodeCard(func(c *Card) { c.PID = 1_000_000 }), good, ErrSelfOrParent},
+		{"unknown provider", opencodeCard(func(c *Card) { c.Provider = "other" }), good, ErrProvider},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := opencodeDeps(opencodeCard(), tt.info)
+			err := d.closer().Close(tt.card)
+			if !errors.Is(err, tt.want) {
+				t.Errorf("Close = %v, want %v", err, tt.want)
+			}
+			if len(d.sig.sent) != 0 {
+				t.Errorf("signaled: %+v", d.sig.sent)
+			}
+		})
 	}
 }

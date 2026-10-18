@@ -29,10 +29,12 @@ func (s *Store) removeSession(e *sessionEntry) {
 }
 
 // discover scans the profiles of each source with it, in the order of the sources, and joins the
-// results. Profiles whose provider has no source are not scanned.
-func (s *Store) discover() (discovery.Result, error) {
+// results. Profiles whose provider has no source are not scanned. A source that fails does not
+// stop the others: its error is reported (once per code) and its profiles keep the result it
+// returned with the error, if any, else its last good one.
+func (s *Store) discover() discovery.Result {
 	var out discovery.Result
-	for i, src := range s.sources {
+	for _, src := range s.sources {
 		var group []config.ProfileDir
 		for _, p := range s.opts.Profiles {
 			if profileProvider(p) == src.Provider() {
@@ -42,21 +44,33 @@ func (s *Store) discover() (discovery.Result, error) {
 		if len(group) == 0 {
 			continue
 		}
+		provider := src.Provider()
 		res, err := src.Discover(group)
 		if err != nil {
-			return discovery.Result{}, err
+			code := errorCode(err)
+			if s.lastScanCode[provider] != code {
+				s.lastScanCode[provider] = code
+				s.pushError("discovery " + string(provider) + ": " + code)
+			}
+			if len(res.Profiles) == 0 {
+				res.Profiles = s.lastGood[provider]
+			}
+		} else {
+			s.lastScanCode[provider] = ""
+			s.lastGood[provider] = res.Profiles
 		}
-		if i == 0 || out.ScannedAt == 0 {
+		if out.ScannedAt == 0 && res.ScannedAt != 0 {
 			out.ScannedAt = res.ScannedAt
 		}
 		out.Profiles = append(out.Profiles, res.Profiles...)
 	}
 	s.reportUnsupported()
 	if out.ScannedAt == 0 {
-		// No profile was scanned (all of them lack a source): the scan still happened.
+		// No profile was scanned (all of them lack a source, or every source failed): the scan
+		// still happened.
 		out.ScannedAt = s.deps.Clock.Now()
 	}
-	return out, nil
+	return out
 }
 
 // reportUnsupported pushes one error, the first time, naming the profiles whose provider has no
@@ -74,11 +88,7 @@ func (s *Store) reportUnsupported() {
 }
 
 func (s *Store) scanOnce() {
-	result, err := s.discover()
-	if err != nil {
-		s.pushError("discovery: " + errorCode(err))
-		return
-	}
+	result := s.discover()
 	if s.isStopped() {
 		return
 	}

@@ -38,6 +38,30 @@ func modelID(s domain.SessionState) string {
 	return s.Model.ID
 }
 
+// sessionWindows are the reported windows of the session: the ones of the context file and,
+// when the provider itself told the window of the session's model (ModelInfo.ContextWindow),
+// that one as the session's own.
+func sessionWindows(s domain.SessionState, reports domain.ContextReports) domain.ReportedWindows {
+	id := modelID(s)
+	w := domain.ReportedWindows{Session: reports.ForSession(s.SessionID, id), Model: reports.ForModel(id)}
+	if s.Model != nil && s.Model.ContextWindow > 0 {
+		w.Session = s.Model.ContextWindow
+	}
+	return w
+}
+
+// agentWindow is the reported window of an agent's model: from the context file, else the
+// session's provider-reported window when the agent runs the same model.
+func agentWindow(s domain.SessionState, agent domain.AgentState, reports domain.ContextReports) int {
+	if size := reports.ForModel(agent.Model); size != 0 {
+		return size
+	}
+	if s.Model != nil && s.Model.ContextWindow > 0 && agent.Model != "" && agent.Model == s.Model.ID {
+		return s.Model.ContextWindow
+	}
+	return 0
+}
+
 func (l *contextLearner) learn(model string, used int, reported domain.ReportedWindows) {
 	base, size, ok := domain.LearnContextWindow(model, used, reported)
 	if ok && l.learned[base] < size {
@@ -49,13 +73,9 @@ func (l *contextLearner) learn(model string, used int, reported domain.ReportedW
 // (of the session or the model) teaches nothing.
 func (l *contextLearner) learnFrom(s domain.SessionState, label string) {
 	reports := l.reportsFor(label)
-	id := modelID(s)
-	l.learn(id, s.Context.Used, domain.ReportedWindows{
-		Session: reports.ForSession(s.SessionID, id),
-		Model:   reports.ForModel(id),
-	})
+	l.learn(modelID(s), s.Context.Used, sessionWindows(s, reports))
 	for _, agent := range s.Agents {
-		l.learn(agent.Model, agent.Context.Used, domain.ReportedWindows{Model: reports.ForModel(agent.Model)})
+		l.learn(agent.Model, agent.Context.Used, domain.ReportedWindows{Model: agentWindow(s, agent, reports)})
 	}
 }
 
@@ -86,7 +106,7 @@ func (l *contextLearner) learnedSignature(s domain.SessionState, label string) s
 			parts = append(parts, id+":model="+strconv.Itoa(model))
 		}
 	}
-	if own := reports.ForSession(s.SessionID, modelID(s)); own != 0 {
+	if own := sessionWindows(s, reports).Session; own != 0 {
 		parts = append(parts, "session="+strconv.Itoa(own))
 	}
 	return strings.Join(parts, ",")

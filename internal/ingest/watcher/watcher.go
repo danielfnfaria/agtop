@@ -46,7 +46,13 @@ const (
 	KindUsage
 	// KindSession watches the transcript of a live session and its subagents/ directory.
 	KindSession
+	// KindFiles watches a few named files directly inside Root (Names); their changes are
+	// debounced (FilesDebounce) into one Change event on Root.
+	KindFiles
 )
+
+// FilesDebounce is the quiet time after the last change of a KindFiles target before it reports.
+const FilesDebounce = 250 * time.Millisecond
 
 // Target is what to watch.
 //
@@ -56,11 +62,34 @@ const (
 //     agent-*.meta.json directly inside it). Canonical paths, as discovery returns them. A
 //     session without transcript or subagents/ has nothing to watch there: the periodic scan
 //     finds the new file and the consumer swaps the session watcher.
+//   - KindFiles: Root is the directory and Names the file names inside it (see FilesTarget);
+//     any change of one of them is reported, debounced, as one Change on Root.
 type Target struct {
 	Kind           Kind
 	Root           string
 	TranscriptPath string
 	SubagentsDir   string
+	// Names are the file names of a KindFiles target, newline separated (Target stays
+	// comparable).
+	Names string
+}
+
+// FilesTarget is the KindFiles target over names inside root.
+func FilesTarget(root string, names ...string) Target {
+	return Target{Kind: KindFiles, Root: root, Names: strings.Join(names, "\n")}
+}
+
+// watchesName reports whether name is one of the Names of a KindFiles target.
+func (t Target) watchesName(name string) bool {
+	if t.Kind != KindFiles || name == "" {
+		return false
+	}
+	for _, n := range strings.Split(t.Names, "\n") {
+		if n == name {
+			return true
+		}
+	}
+	return false
 }
 
 // Watcher reports the changes of one Target.
@@ -191,6 +220,9 @@ func (w *fsWatcher) dirPath() string {
 // watchesFile tells which entries of the directory also need a watch of their own, so that
 // appends are seen; registry and usage files are replaced, which the directory watch sees.
 func (w *fsWatcher) watchesFile(name string) bool {
+	if w.target.Kind == KindFiles {
+		return w.target.watchesName(name)
+	}
 	return w.target.Kind == KindSession && subagentFileRE.MatchString(name)
 }
 
@@ -225,12 +257,40 @@ func (w *fsWatcher) run() {
 	if w.dw != nil {
 		dwEvents, dwErrs = w.dw.Events(), w.dw.Errors()
 	}
+	// KindFiles: the changes are held until FilesDebounce passes without a new one.
+	var debounce *time.Timer
+	var due <-chan time.Time
+	var held Event
+	deliver := func(ev Event) bool {
+		if w.target.Kind != KindFiles {
+			return w.send(ev)
+		}
+		held = ev
+		if debounce == nil {
+			debounce = time.NewTimer(FilesDebounce)
+			due = debounce.C
+		} else {
+			debounce.Reset(FilesDebounce)
+		}
+		return true
+	}
+	defer func() {
+		if debounce != nil {
+			debounce.Stop()
+		}
+	}()
 	for {
 		select {
 		case <-w.done:
 			return
+		case <-due:
+			due = nil
+			debounce = nil
+			if !w.send(held) {
+				return
+			}
 		case ev := <-dwEvents:
-			if out, ok := w.translate(ev); ok && !w.send(out) {
+			if out, ok := w.translate(ev); ok && !deliver(out) {
 				return
 			}
 		case err := <-dwErrs:
@@ -241,7 +301,7 @@ func (w *fsWatcher) run() {
 			if !ok {
 				return
 			}
-			if out, ok := w.translate(ev); ok && !w.send(out) {
+			if out, ok := w.translate(ev); ok && !deliver(out) {
 				return
 			}
 		case err, ok := <-w.fsw.Errors:
@@ -274,6 +334,12 @@ func (w *fsWatcher) send(ev Event) bool {
 }
 
 func (w *fsWatcher) translate(ev fsnotify.Event) (Event, bool) {
+	if w.target.Kind == KindFiles {
+		if !w.target.watchesName(filepath.Base(ev.Name)) {
+			return Event{}, false
+		}
+		return Event{Op: Change, Path: w.target.Root}, true
+	}
 	if w.target.Kind != KindSession {
 		if !IsRegistryFileName(filepath.Base(ev.Name)) {
 			return Event{}, false

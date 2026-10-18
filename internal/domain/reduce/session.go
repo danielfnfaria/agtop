@@ -281,7 +281,7 @@ func ReduceSession(state domain.SessionState, event domain.TranscriptEvent) doma
 		}
 		return s
 	case domain.ModelAttachmentEvent:
-		s.Model = &domain.ModelInfo{ID: ev.ModelID, Name: ev.Name}
+		s.Model = &domain.ModelInfo{ID: ev.ModelID, Name: ev.Name, ContextWindow: ev.ContextWindow}
 		return s
 	case domain.AITitleEvent:
 		s.AITitle = ev.Title

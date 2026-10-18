@@ -40,7 +40,9 @@ type Source interface {
 	// Provider is the provider of every session and profile this source reports.
 	Provider() domain.ProviderID
 	// Discover scans the given profiles once (all of this provider): live sessions (one per
-	// session id) with their files, the inactive ones and per-profile diagnostics.
+	// session id) with their files, the inactive ones and per-profile diagnostics. With an
+	// error the result may still hold the profiles it could scan (the store uses them, else its
+	// last good result of the source); the error is reported by its code.
 	Discover(profiles []config.ProfileDir) (discovery.Result, error)
 	// RegistryWatch is the target whose events mean the live set of profile may have changed
 	// (the store watches it and scans on any event); false when there is nothing to watch yet.

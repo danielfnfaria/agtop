@@ -86,7 +86,10 @@ type LiveSessionRecord struct {
 	// UpdatedAt and StartedAt are epoch ms.
 	UpdatedAt int64
 	StartedAt int64
-	Alive     bool
+	// ProcessStartedAt is the start of the process at PID as the operating system reports it
+	// (epoch ms), for providers without a registry record; 0 when unknown.
+	ProcessStartedAt int64
+	Alive            bool
 	// DeadReason is set only when Alive is false.
 	DeadReason DeadReason
 }
@@ -103,6 +106,8 @@ const (
 	IssueInvalidPID       IssueReason = "invalid_pid"
 	IssuePIDMismatch      IssueReason = "pid_mismatch"
 	IssueInvalidSessionID IssueReason = "invalid_session_id"
+	// IssueDatabase: a provider database (File) could not be read; the store error says why.
+	IssueDatabase IssueReason = "database"
 )
 
 // RegistryIssue is a problem with a registry file. It never includes file content.
