@@ -277,6 +277,44 @@ func TestTopBarNoUsage(t *testing.T) {
 	}
 }
 
+func TestTopBarSetupHintProvider(t *testing.T) {
+	ocSym := domain.Providers[domain.Opencode].Symbol
+	ccSym := domain.Providers[domain.ClaudeCode].Symbol
+
+	// opencode (no usage) first, then Claude Code (no usage): the hint belongs on the Claude
+	// Code line only.
+	two := NewTopBarModel(topInput(func(in *TopBarInput) {
+		in.Profiles = []config.ProfileDir{
+			{Label: "oc", Dir: "/tmp/oc", Source: config.ProfileSource("config"), Provider: domain.Opencode},
+			{Label: "claude", Dir: "/tmp/a/.claude", Source: config.ProfileSource("default")},
+		}
+		in.Usage = nil
+		in.Providers = map[string]domain.ProviderID{"oc": domain.Opencode, "claude": domain.ClaudeCode}
+	}))
+	oc, cc := text(two.Lines[0]), text(two.Lines[1])
+	if !regexp.MustCompile("^" + ocSym + " oc ").MatchString(oc) {
+		t.Errorf("opencode line = %q", oc)
+	}
+	if strings.Contains(oc, SetupHint) {
+		t.Errorf("hint on the opencode line: %q", oc)
+	}
+	if !regexp.MustCompile("^" + ccSym + " claude .*" + regexp.QuoteMeta(SetupHint)).MatchString(cc) {
+		t.Errorf("claude line lacks the setup hint: %q", cc)
+	}
+
+	// A single opencode profile without usage: no hint anywhere.
+	one := NewTopBarModel(topInput(func(in *TopBarInput) {
+		in.Profiles = []config.ProfileDir{
+			{Label: "oc", Dir: "/tmp/oc", Source: config.ProfileSource("config"), Provider: domain.Opencode},
+		}
+		in.Usage = nil
+		in.Providers = map[string]domain.ProviderID{"oc": domain.Opencode}
+	}))
+	if len(one.Lines) != 1 || strings.Contains(text(one.Lines[0]), SetupHint) {
+		t.Errorf("single opencode line = %q", text(one.Lines[0]))
+	}
+}
+
 func TestTopBarProfiles(t *testing.T) {
 	sym := domain.Providers[domain.ClaudeCode].Symbol
 	one := NewTopBarModel(topInput(func(in *TopBarInput) { in.Profiles = profiles[:1] }))
