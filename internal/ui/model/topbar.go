@@ -22,8 +22,9 @@ import (
 // The provider symbol (in its color), then the label (in the profile color), padded so the
 // columns line up; the 5h and 7d windows with bar and % in the usage color and the reset time
 // (local HH:MM for 5h; for 7d HH:MM within a day, else the short weekday); stale data in dim with
-// `(stale)`; no usage file: `5h —  7d —` in dim and, on the first such line only, a short setup
-// hint; and the activity over the last hour (one cell per 30 s bucket), aligned on all lines.
+// `(stale)`; no usage file: `5h —  7d —` in dim and, on the first such line of a Claude Code
+// profile only, a short setup hint (other providers have no status line to wire); and the
+// activity over the last hour (one cell per 30 s bucket), aligned on all lines.
 //
 // On a narrow terminal, in this order: the setup hint goes, the sparkline shrinks (down to
 // TopSparkMin) and then goes, then the reset times, then the bars (only the % stays). Lines
@@ -74,7 +75,7 @@ const (
 	TopSparkMin = 10
 	// TopSparkMax is the widest sparkline (the activity window has 120 buckets).
 	TopSparkMax = 120
-	// SetupHint is the hint on the first line without usage data.
+	// SetupHint is the hint on the first Claude Code profile line without usage data.
 	SetupHint = "(run: agtop setup)"
 
 	topGap      = "   "
@@ -189,6 +190,14 @@ func sparkSegments(h domain.ActivityHistogram, tone style.Color, now int64, widt
 	return out
 }
 
+// providerOf is the provider of a profile label (Claude Code when it has no entry).
+func providerOf(providers map[string]domain.ProviderID, label string) domain.ProviderID {
+	if pid, ok := providers[label]; ok {
+		return pid
+	}
+	return domain.ClaudeCode
+}
+
 // providerSegments is the provider symbol (width 1, provider color) and a space, before the
 // profile label.
 func providerSegments(id domain.ProviderID, g style.Glyphs) []Segment {
@@ -229,8 +238,13 @@ func NewTopBarModel(in TopBarInput) TopBarModel {
 	for i, p := range in.Profiles {
 		labels[i] = FitWidth(p.Label, TopLabelMax, g.Ellipsis)
 		labelWidth = max(labelWidth, ansi.StringWidth(labels[i]))
-		if _, ok := in.Usage[p.Label]; !ok && hintAt < 0 {
-			hintAt = i
+		// The setup hint only makes sense for Claude Code profiles: agtop setup wires the
+		// status line for those only. Skip any other provider here, or a non-Claude profile
+		// without usage that comes first would swallow the hint for every line.
+		if providerOf(in.Providers, p.Label) == domain.ClaudeCode {
+			if _, ok := in.Usage[p.Label]; !ok && hintAt < 0 {
+				hintAt = i
+			}
 		}
 	}
 
@@ -248,16 +262,13 @@ func NewTopBarModel(in TopBarInput) TopBarModel {
 				[]Segment{{Text: topGap}},
 				windowSegments("7d", seven, lvl, dim, func(at int64) string { return FmtResetDay(at, now, in.Loc) }, g, t),
 			)
+			id := providerOf(in.Providers, p.Label)
 			var note []Segment
 			switch {
 			case has && u.Stale:
 				note = []Segment{{Text: " " + staleText, Dim: true}}
-			case withHint && i == hintAt:
+			case withHint && i == hintAt && id == domain.ClaudeCode:
 				note = []Segment{{Text: " " + SetupHint, Color: t.Muted, Dim: true}}
-			}
-			id := domain.ClaudeCode
-			if pid, ok := in.Providers[p.Label]; ok {
-				id = pid
 			}
 			parts[i] = lineParts{
 				label: slices.Concat(
