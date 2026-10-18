@@ -73,6 +73,7 @@ func profileStatuses(profiles []config.ProfileDir, last *discovery.Result,
 			Source:   profile.Source,
 			Issues:   map[discovery.IssueReason]int{},
 		}
+		st.Unsupported = last != nil && pd == nil
 		if pd != nil {
 			st.LiveCount = len(pd.Live)
 			st.SessionsDirMissing = pd.Diagnostics.SessionsDirMissing

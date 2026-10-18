@@ -45,8 +45,10 @@ type InitialConfigInput struct {
 	// Profile is the directory agtop would watch without a file.
 	Profile ProfileDir
 	// Hints are other directories worth suggesting; written as comments.
-	Hints   []ProfileDir
-	Homedir string
+	Hints []ProfileDir
+	// Opencode suggests an opencode profile (its database exists).
+	Opencode bool
+	Homedir  string
 }
 
 // RenderInitialConfig returns the text of the config file created on the first run.
@@ -70,6 +72,10 @@ func RenderInitialConfig(in InitialConfigInput) string {
 		for _, h := range in.Hints {
 			lines = append(lines, "# "+tomlKey(h.Label)+" = "+tomlValue(h.Dir, in.Homedir))
 		}
+	}
+	if in.Opencode {
+		lines = append(lines, "", "# opencode data found; uncomment to watch it too:",
+			"# "+tomlKey("oc")+` = { provider = "opencode" }`)
 	}
 	return strings.Join(lines, "\n") + "\n"
 }
@@ -152,13 +158,15 @@ func CreateConfigFileIfMissing(fsys FS, file, text string) (InitResult, error) {
 // InitConfigFile handles the first run without a config file: it writes one with the directory
 // being watched (plus commented hints for sibling profiles) and says so on stderr. Failures
 // only warn: the viewer keeps going.
-func InitConfigFile(fsys FS, configPath string, profiles []ProfileDir, homedir string, stderr io.Writer) {
+func InitConfigFile(fsys FS, env Env, configPath string, profiles []ProfileDir, homedir string, stderr io.Writer) {
 	if len(profiles) == 0 {
 		return
 	}
 	profile := profiles[0]
 	hints := FindSiblingProfiles(homedir, profile.Dir, fsys)
-	result, err := CreateConfigFileIfMissing(fsys, configPath, RenderInitialConfig(InitialConfigInput{Profile: profile, Hints: hints, Homedir: homedir}))
+	opencode := fsys.IsRegularFile(filepath.Join(DefaultOpencodeDir(env, homedir), OpencodeDBName))
+	text := RenderInitialConfig(InitialConfigInput{Profile: profile, Hints: hints, Opencode: opencode, Homedir: homedir})
+	result, err := CreateConfigFileIfMissing(fsys, configPath, text)
 	switch {
 	case err != nil:
 		fmt.Fprintf(stderr, "agtop: warning: could not create %s: %v\n", configPath, err)

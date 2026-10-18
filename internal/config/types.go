@@ -28,6 +28,14 @@ type ProfileDir struct {
 	Provider domain.ProviderID
 }
 
+// ProviderOf is the provider of a profile (Claude Code when it does not say).
+func ProviderOf(p ProfileDir) domain.ProviderID {
+	if p.Provider == "" {
+		return domain.ClaudeCode
+	}
+	return p.Provider
+}
+
 // FS is the subset of filesystem operations the config layer uses, injectable for tests.
 type FS interface {
 	// IsDirectory reports whether p exists and is a directory (following symlinks).

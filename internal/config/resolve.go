@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// ResolveInput is the input of ResolveClaudeDirs.
+// ResolveInput is the input of ResolveProfiles.
 type ResolveInput struct {
 	// Profiles are the [profiles] of the config file; empty uses the fallback.
 	Profiles []ProfileDir
@@ -18,12 +18,12 @@ type ResolveInput struct {
 	ConfigPath string
 }
 
-// ResolveClaudeDirs resolves the directories to watch: the file's [profiles] (label = table
+// ResolveProfiles resolves the directories to watch: the file's [profiles] (label = table
 // key, in file order), else CLAUDE_CONFIG_DIR, else <homedir>/.claude. There is no automatic
-// search for other profiles. Two labels with the same realpath are an error. In the fallback a
+// search for other profiles. Two labels of the same provider with the same realpath are an error. In the fallback a
 // missing directory is an error suggesting [profiles]; for file profiles validation reports it
 // later.
-func ResolveClaudeDirs(in ResolveInput) ([]ProfileDir, error) {
+func ResolveProfiles(in ResolveInput) ([]ProfileDir, error) {
 	if len(in.Profiles) > 0 {
 		return rejectDuplicates(in.Profiles, in.FS)
 	}
@@ -53,10 +53,11 @@ func ResolveClaudeDirs(in ResolveInput) ([]ProfileDir, error) {
 func rejectDuplicates(profiles []ProfileDir, fsys FS) ([]ProfileDir, error) {
 	seen := make(map[string]ProfileDir, len(profiles))
 	for _, p := range profiles {
-		key, err := fsys.Realpath(p.Dir)
+		dir, err := fsys.Realpath(p.Dir)
 		if err != nil {
-			key = p.Dir // missing: validation reports it later
+			dir = p.Dir // missing: validation reports it later
 		}
+		key := string(ProviderOf(p)) + "\x00" + dir
 		if other, ok := seen[key]; ok {
 			return nil, errorf("profiles \"%s\" and \"%s\" point to the same directory (%s)", other.Label, p.Label, p.Dir)
 		}

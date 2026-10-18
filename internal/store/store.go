@@ -62,15 +62,17 @@ type Store struct {
 	usage          *usageTracker
 	lastDiscovery  *discovery.Result
 	profilesSig    []ProfileStatus
-	scanTok        *struct{}
-	scanStop       func()
-	scanQueued     bool
-	errors         []string
-	dirty          bool
-	lastEmitAt     int64
-	emitted        bool
-	emitTok        *struct{}
-	emitStop       func()
+	// unsupportedReported: the profiles without a source were already reported.
+	unsupportedReported bool
+	scanTok             *struct{}
+	scanStop            func()
+	scanQueued          bool
+	errors              []string
+	dirty               bool
+	lastEmitAt          int64
+	emitted             bool
+	emitTok             *struct{}
+	emitStop            func()
 }
 
 // New creates a store; nothing runs until Start.
@@ -128,12 +130,7 @@ func (s *Store) sourceOf(provider domain.ProviderID) source.Source {
 }
 
 // profileProvider is the provider of a profile (Claude Code when it does not say).
-func profileProvider(p config.ProfileDir) domain.ProviderID {
-	if p.Provider == "" {
-		return domain.ClaudeCode
-	}
-	return p.Provider
-}
+func profileProvider(p config.ProfileDir) domain.ProviderID { return config.ProviderOf(p) }
 
 // Snapshot is the last emitted snapshot (the same pointer until the next emission).
 func (s *Store) Snapshot() *Snapshot { return s.snap.Load() }

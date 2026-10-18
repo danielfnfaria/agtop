@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/danielfnfaria/agtop/internal/domain"
 )
 
 const (
@@ -14,7 +16,7 @@ const (
 
 func parse(t *testing.T, text string) FileData {
 	t.Helper()
-	d, err := ParseFile(text, file, home)
+	d, err := ParseFile(text, file, nil, home)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -100,7 +102,7 @@ func TestParseFileErrors(t *testing.T) {
 	})
 
 	t.Run("invalid TOML cites the file and the line", func(t *testing.T) {
-		_, err := ParseFile("[profiles]\na = \nb = 1", file, home)
+		_, err := ParseFile("[profiles]\na = \nb = 1", file, nil, home)
 		var ce *Error
 		if !errors.As(err, &ce) || !strings.HasPrefix(err.Error(), file+": ") || !strings.Contains(err.Error(), "2| a =") {
 			t.Errorf("got %v", err)
@@ -190,6 +192,58 @@ func TestLoadFile(t *testing.T) {
 		_, err := LoadFile(str("bad.toml"), fake, opts)
 		if err == nil || err.Error() != `/work/bad.toml: unknown key "x" (expected [profiles], [theme], [glyphs], [layout])` {
 			t.Errorf("got %v", err)
+		}
+	})
+}
+
+func TestParseFileOpencodeProfiles(t *testing.T) {
+	t.Run("a table with provider opencode; dir defaults to the data dir", func(t *testing.T) {
+		got := parse(t, "[profiles]\nc = \"~/.claude\"\noc = { provider = \"opencode\" }\n").Profiles
+		want := []ProfileDir{
+			{Label: "c", Dir: "/home/u/.claude", Source: SourceConfig},
+			{Label: "oc", Dir: "/home/u/.local/share/opencode", Source: SourceConfig, Provider: domain.Opencode},
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("got %+v", got)
+		}
+	})
+
+	t.Run("the default dir follows an absolute XDG_DATA_HOME", func(t *testing.T) {
+		d, err := ParseFile("[profiles]\noc = { provider = \"opencode\" }", file, Env{EnvXDGDataHome: "/xdg"}, home)
+		if err != nil || d.Profiles[0].Dir != "/xdg/opencode" {
+			t.Errorf("got %+v, %v", d.Profiles, err)
+		}
+	})
+
+	t.Run("explicit dir with ~; claude-code is the default provider", func(t *testing.T) {
+		got := parse(t, "[profiles]\na = { provider = \"opencode\", dir = \"~/oc/\" }\nb = { provider = \"claude-code\", dir = \"/x\" }\n").Profiles
+		want := []ProfileDir{
+			{Label: "a", Dir: "/home/u/oc", Source: SourceConfig, Provider: domain.Opencode},
+			{Label: "b", Dir: "/x", Source: SourceConfig},
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("got %+v", got)
+		}
+	})
+
+	t.Run("errors name the file and the profile", func(t *testing.T) {
+		tests := []struct{ text, want string }{
+			{"[profiles]\na = {}", file + `: profiles.a needs a provider`},
+			{"[profiles]\na = { dir = \"/x\" }", file + `: profiles.a needs a provider`},
+			{"[profiles]\na = { provider = \"codex\" }", file + `: profiles.a has an unknown provider "codex"`},
+			{"[profiles]\na = { provider = 1 }", file + `: profiles.a.provider must be a string`},
+			{"[profiles]\na = { provider = \"opencode\", path = \"/x\" }", file + `: profiles.a has an unknown key "path"`},
+			{"[profiles]\na = { provider = \"opencode\", dir = 1 }", file + `: profiles.a.dir must be a string path`},
+			{"[profiles]\na = { provider = \"opencode\", dir = \" \" }", file + `: profiles.a.dir is an empty path`},
+			{"[profiles]\na = { provider = \"opencode\", dir = \"rel\" }", file + `: profiles.a.dir = "rel" is not absolute`},
+			{"[profiles]\na = { provider = \"claude-code\" }", file + `: profiles.a needs a dir`},
+			{"[profiles]\na = 1", file + `: profiles.a must be a string path or a table`},
+		}
+		for _, tt := range tests {
+			_, err := ParseFile(tt.text, file, nil, home)
+			if err == nil || !strings.HasPrefix(err.Error(), tt.want) {
+				t.Errorf("%q: got %v, want prefix %q", tt.text, err, tt.want)
+			}
 		}
 	})
 }

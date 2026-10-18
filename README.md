@@ -111,8 +111,18 @@ work = "~/.claude-work"
 
 `[profiles]` maps a label (shown in the viewer) to a Claude Code config directory, in
 the order of the file. Paths are absolute or start with `~`; two labels for the same
-directory are an error. `agtop setup` reads the same file (and `--config`), so it wires
+directory and provider are an error. `agtop setup` reads the same file (and `--config`), so it wires
 the same profiles.
+
+An opencode profile is a table instead of a path. `dir` is optional (default
+`$XDG_DATA_HOME/opencode`, else `~/.local/share/opencode`) and must contain `opencode.db`:
+
+```toml
+oc = { provider = "opencode" }
+```
+
+Reading opencode sessions is not available yet; for now such a profile only shows an error.
+`agtop setup` skips it.
 
 Without `[profiles]`, agtop watches `CLAUDE_CONFIG_DIR` (the same variable Claude Code
 uses) if it is set, otherwise `~/.claude`, labelled by the directory name. It does not
