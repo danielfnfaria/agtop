@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -277,5 +278,46 @@ func TestResolveValidatesByProvider(t *testing.T) {
 	}
 	if len(cmd.Profiles) != 2 || cmd.Profiles[1].Provider != domain.Opencode {
 		t.Errorf("profiles %+v", cmd.Profiles)
+	}
+}
+
+func TestResolveRejectsBadSystem(t *testing.T) {
+	home := mkHome(t)
+	for _, tt := range []struct {
+		name string
+		mut  func(*System)
+		want string
+	}{
+		{"empty home", func(s *System) { s.Homedir = "" }, "home directory"},
+		{"relative home", func(s *System) { s.Homedir = "rel/home" }, "home directory"},
+		{"home lookup failed", func(s *System) { s.InitErr = errors.New("$HOME is not defined") }, "$HOME is not defined"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, err := resolve(t, []string{"--dump"}, home, tt.mut)
+			var ce *config.Error
+			if !errors.As(err, &ce) || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("got %v", err)
+			}
+		})
+	}
+	for _, argv := range [][]string{{"--help"}, {"--version"}, {"statusline-hook"}} {
+		t.Run("no home needed for "+argv[0], func(t *testing.T) {
+			_, _, err := resolve(t, argv, home, func(s *System) { s.Homedir = "" })
+			if err != nil {
+				t.Errorf("got %v", err)
+			}
+		})
+	}
+}
+
+func TestResolveRejectsEmptyConfig(t *testing.T) {
+	home := mkHome(t)
+	for _, argv := range [][]string{{"--config="}, {"--config", ""}, {"setup", "--config="}} {
+		t.Run(strings.Join(argv, " "), func(t *testing.T) {
+			_, _, err := resolve(t, argv, home, nil)
+			if err == nil || !strings.Contains(err.Error(), "'--config' needs a non-empty path") {
+				t.Errorf("got %v", err)
+			}
+		})
 	}
 }
