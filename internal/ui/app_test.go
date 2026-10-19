@@ -664,6 +664,55 @@ func TestCloseNotStartedOnSmallTerminal(t *testing.T) {
 	}
 }
 
+func TestTreeIsMemoized(t *testing.T) {
+	st := newFakeStore(snapshot([]*store.SessionView{sessionWithAgents(), session("claude:s2", nil)}, profiles))
+	a := newApp(testOptions(st, profiles), 100, 30)
+	fresh := func() treeModel {
+		return buildTreeModel(a.snap, a.profiles, a.nav, a.width, a.appearance.Glyphs.Line)
+	}
+	same := func(step string) {
+		t.Helper()
+		if got, want := a.tree(), fresh(); !reflect.DeepEqual(got, want) {
+			t.Fatalf("%s: cached tree differs from a fresh build", step)
+		}
+	}
+
+	same("initial")
+	before := a.treeBuilds
+	for range 5 {
+		a.tree()
+		a.Render()
+	}
+	// Timer messages and notices change nothing the tree reads.
+	a.Update(spinMsg{seq: a.spinSeq})
+	a.Update(clockMsg{})
+	if a.treeBuilds != before {
+		t.Fatalf("tree rebuilt %d times for equal inputs", a.treeBuilds-before)
+	}
+
+	// Every input invalidates: snapshot, width, open session, profile filter.
+	steps := []struct {
+		name string
+		do   func()
+	}{
+		{"snapshot", func() {
+			st.set(snapshot([]*store.SessionView{session("claude:s2", nil)}, profiles))
+			a.Update(snapshotMsg{snap: st.Snapshot()})
+		}},
+		{"width", func() { a.Update(tea.WindowSizeMsg{Width: 80, Height: 30}) }},
+		{"detail", func() { a.nav.DetailKey = "claude:s2" }},
+		{"filter", func() { a.nav.ProfileFilter = profiles[0].Label }},
+	}
+	for _, s := range steps {
+		n := a.treeBuilds
+		s.do()
+		same(s.name)
+		if a.treeBuilds == n {
+			t.Fatalf("%s: tree not rebuilt after the input changed", s.name)
+		}
+	}
+}
+
 func TestEmptyStateNamesTheProvider(t *testing.T) {
 	oc := []config.ProfileDir{{Label: "oc", Dir: "/home/u/.local/share/opencode", Provider: domain.Opencode}}
 	t.Run("an unsupported profile says so", func(t *testing.T) {

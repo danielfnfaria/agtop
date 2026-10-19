@@ -80,6 +80,12 @@ type App struct {
 	lastNotice         string
 	retained           int
 	exitCode           int
+
+	// treeVal is the memoized tree model for treeKey (see tree); treeBuilds counts the builds.
+	treeVal    treeModel
+	treeKey    treeKey
+	treeCached bool
+	treeBuilds int
 }
 
 // newApp builds the model; width and height are the terminal size until the first resize.
@@ -220,8 +226,27 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return a, tea.Batch(cmds...)
 }
 
+// treeKey is everything buildTreeModel reads that can change while the app runs: the snapshot
+// (immutable, a new pointer per emission), the two navigation fields it consults, and the width.
+// The profiles and the glyphs are fixed at construction.
+type treeKey struct {
+	snap          *store.Snapshot
+	profileFilter string
+	detailKey     string
+	width         int
+}
+
+// tree is the tree model of the current state, memoized on its inputs: sorting every session's
+// agents and laying out the grid is too much to repeat per message (the spinner alone ticks every
+// 160 ms and Update, settle and Render all ask for it).
 func (a *App) tree() treeModel {
-	return buildTreeModel(a.snap, a.profiles, a.nav, a.width, a.appearance.Glyphs.Line)
+	k := treeKey{a.snap, a.nav.ProfileFilter, a.nav.DetailKey, a.width}
+	if !a.treeCached || a.treeKey != k {
+		a.treeVal = buildTreeModel(a.snap, a.profiles, a.nav, a.width, a.appearance.Glyphs.Line)
+		a.treeKey, a.treeCached = k, true
+		a.treeBuilds++
+	}
+	return a.treeVal
 }
 
 // requestClose enters the close confirmation for the selected session, freezing its identity so a
