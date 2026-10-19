@@ -4,6 +4,7 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/danielfnfaria/agtop/internal/domain"
 	"github.com/danielfnfaria/agtop/internal/ui/style"
@@ -17,6 +18,9 @@ type FileData struct {
 	// Appearance holds [theme], [glyphs] and [layout]; nil when none is in the file.
 	Appearance *style.AppearanceConfig
 }
+
+// maxLabelLen bounds a profile label (in characters): it is shown in the header and in warnings.
+const maxLabelLen = 64
 
 var sections = []string{"profiles", "theme", "glyphs", "layout"}
 
@@ -54,6 +58,12 @@ func ParseFile(text, file string, env Env, homedir string) (FileData, error) {
 		value := profilesTable[label]
 		if strings.TrimSpace(label) == "" {
 			return FileData{}, errorf("%s: profiles has an empty label", file)
+		}
+		if strings.IndexFunc(label, nonPrintable) >= 0 {
+			return FileData{}, errorf("%s: profiles has a label with control characters", file)
+		}
+		if utf8.RuneCountInString(label) > maxLabelLen {
+			return FileData{}, errorf("%s: profiles has a label longer than %d characters", file, maxLabelLen)
 		}
 		profile, err := parseProfile(label, value, file, env, homedir)
 		if err != nil {
@@ -117,6 +127,9 @@ func parseProfile(label string, value any, file string, env Env, homedir string)
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return ProfileDir{}, errorf("%s: %s is an empty path", file, field)
+	}
+	if strings.IndexFunc(raw, nonPrintable) >= 0 {
+		return ProfileDir{}, errorf("%s: %s must not contain control characters", file, field)
 	}
 	dir := ExpandHome(raw, homedir)
 	if !filepath.IsAbs(dir) {

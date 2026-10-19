@@ -90,6 +90,10 @@ func TestParseFileErrors(t *testing.T) {
 		{"empty label", "[profiles]\n\"\" = \"/x\"", f + "profiles has an empty label"},
 		{"blank label", "[profiles]\n\"  \" = \"/x\"", "empty label"},
 		{"duplicate key", "[profiles]\na = \"/x\"\na = \"/y\"", f},
+		{"control character in label", "[profiles]\n\"a\\u001b[2J\" = \"/x\"", "profiles has a label with control characters"},
+		{"label too long", "[profiles]\n\"" + strings.Repeat("a", 65) + "\" = \"/x\"", "profiles has a label longer than 64 characters"},
+		{"control character in path", "[profiles]\na = \"/x\\u0007y\"", "profiles.a must not contain control characters"},
+		{"control character in dir", "[profiles]\na = { provider = \"claude-code\", dir = \"/x\\u001by\" }", "profiles.a.dir must not contain control characters"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) { wantFails(t, tt.text, tt.want) })

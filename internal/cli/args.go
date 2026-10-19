@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -55,6 +56,8 @@ type System struct {
 	Env     config.Env
 	Homedir string
 	Cwd     string
+	// InitErr is why Homedir or Cwd could not be found, if it failed.
+	InitErr error
 	FS      config.FS
 	Stdin   io.Reader
 	Stderr  io.Writer
@@ -72,12 +75,13 @@ func (s System) now() time.Time {
 	return time.Now()
 }
 
-// OSSystem is the System of the running process.
+// OSSystem is the System of the running process. A failure to find the home directory or the
+// cwd is kept in InitErr, for Resolve to report.
 func OSSystem() System {
-	home, _ := os.UserHomeDir()
-	cwd, _ := os.Getwd()
+	home, homeErr := os.UserHomeDir()
+	cwd, cwdErr := os.Getwd()
 	return System{
-		Env: config.EnvFromOS(), Homedir: home, Cwd: cwd, FS: config.OSFS{},
+		Env: config.EnvFromOS(), Homedir: home, Cwd: cwd, InitErr: errors.Join(homeErr, cwdErr), FS: config.OSFS{},
 		Stdin: os.Stdin, Stderr: os.Stderr,
 		StdinTTY: isTerminal(os.Stdin), StdoutTTY: isTerminal(os.Stdout),
 	}
@@ -128,6 +132,16 @@ func Resolve(argv []string, sys System) (Command, error) {
 	if err != nil {
 		return Command{}, err
 	}
+	if f.version {
+		return Command{Mode: ModeVersion}, nil
+	}
+	// Without an absolute home, the default config path would be relative to the cwd.
+	if sys.InitErr != nil {
+		return Command{}, &config.Error{Msg: sys.InitErr.Error()}
+	}
+	if !filepath.IsAbs(sys.Homedir) {
+		return Command{}, &config.Error{Msg: fmt.Sprintf("cannot find the home directory (got %q): set $HOME to an absolute path", sys.Homedir)}
+	}
 	if setupMode {
 		// The directories are not validated like the viewer's: a fresh profile may have no
 		// projects/ yet; setup skips the ones that do not exist.
@@ -136,9 +150,6 @@ func Resolve(argv []string, sys System) (Command, error) {
 			return Command{}, err
 		}
 		return Command{Mode: ModeSetup, Profiles: profiles, Setup: setup.Options{Remove: f.remove, Yes: f.yes, DryRun: f.dryRun}}, nil
-	}
-	if f.version {
-		return Command{Mode: ModeVersion}, nil
 	}
 	profiles, appearance, configPath, fileLoaded, err := loadRunConfig(f.config, sys)
 	if err != nil {
@@ -162,6 +173,8 @@ func Resolve(argv []string, sys System) (Command, error) {
 	return cmd, nil
 }
 
+var errEmptyConfig = &config.Error{Msg: "option '--config' needs a non-empty path"}
+
 func parseFlags(argv []string, setupMode bool) (flags, error) {
 	var f flags
 	for i := 0; i < len(argv); i++ {
@@ -183,9 +196,15 @@ func parseFlags(argv []string, setupMode bool) (flags, error) {
 			}
 			i++
 			v := argv[i]
+			if v == "" {
+				return f, errEmptyConfig
+			}
 			f.config = &v
 		case strings.HasPrefix(arg, "--config="):
 			v := strings.TrimPrefix(arg, "--config=")
+			if v == "" {
+				return f, errEmptyConfig
+			}
 			f.config = &v
 		case strings.HasPrefix(arg, "-"):
 			return f, &config.Error{Msg: fmt.Sprintf("unknown option '%s'", arg)}
