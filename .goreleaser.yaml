@@ -5,7 +5,7 @@ project_name: agtop
 
 before:
   hooks:
-    - go mod tidy
+    - go mod tidy -diff
 
 builds:
   - id: agtop
