@@ -59,8 +59,8 @@ func TestRenderInitialConfig(t *testing.T) {
 	t.Run("round-trips through ParseFile", func(t *testing.T) {
 		for _, p := range []ProfileDir{
 			prof("my dir", `/opt/claude "x"`),
-			prof("a\x7fb", "/opt/x\x7fy"),
-			prof("tab\tq\\", "/opt/\né"),
+			// Control characters are rejected on read (see TestParseFileErrors): not round-tripped.
+			prof("q\\\"é", "/opt/x\\y é"),
 			prof("claude", home+"/.claude"),
 		} {
 			text := render(p, prof("claude-work", home+"/.claude-work"))
