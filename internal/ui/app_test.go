@@ -508,7 +508,12 @@ func TestCloseConfirm(t *testing.T) {
 	for _, confirmKey := range []string{"y", "enter"} {
 		t.Run(confirmKey, func(t *testing.T) {
 			a, fc := closeApp()
-			press(a, "down", "x", confirmKey)
+			cmd := press(a, "down", "x", confirmKey)
+			if len(fc.called) != 0 {
+				t.Fatalf("closer ran inside Update: %+v", fc.called)
+			}
+			mustNotContain(t, screen(a), "sent SIGTERM")
+			deliver(t, a, cmd)
 			if len(fc.called) != 1 {
 				t.Fatalf("closer called %d times", len(fc.called))
 			}
@@ -549,8 +554,22 @@ func TestCloseIgnoresOtherKeysWhileConfirming(t *testing.T) {
 func TestCloseErrorShowsNotice(t *testing.T) {
 	a, fc := closeApp()
 	fc.err = errors.New("process is not alive")
-	press(a, "down", "x", "y")
+	deliver(t, a, press(a, "down", "x", "y"))
 	mustContain(t, screen(a), `cannot close "My task": process is not alive`)
+}
+
+// deliver runs the close command (the fake closer does no I/O, no timers) and feeds its result to
+// the app, as the Bubble Tea runtime would.
+func deliver(t *testing.T, a *App, cmd tea.Cmd) {
+	t.Helper()
+	if cmd == nil {
+		t.Fatal("no close command")
+	}
+	msg, ok := cmd().(closeResultMsg)
+	if !ok {
+		t.Fatalf("command did not return a closeResultMsg")
+	}
+	a.Update(msg)
 }
 
 func TestCloseWithoutSelectionDoesNothing(t *testing.T) {

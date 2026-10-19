@@ -46,6 +46,13 @@ type (
 	noticeMsg   struct{ seq int }
 	retainedMsg struct{ n int }
 	signalMsg   struct{ code int }
+	// closeResultMsg is the outcome of a close started by confirmClose: err is nil when SIGTERM
+	// was sent. title and pid are the frozen identity the user confirmed.
+	closeResultMsg struct {
+		title string
+		pid   int
+		err   error
+	}
 )
 
 // App is the Bubble Tea model of the viewer.
@@ -166,6 +173,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case signalMsg:
 		a.exitCode = msg.code
 		return a, tea.Quit
+	case closeResultMsg:
+		if msg.err != nil {
+			a.nav.Notice = "cannot close \"" + msg.title + "\": " + msg.err.Error()
+		} else {
+			a.nav.Notice = "sent SIGTERM to \"" + msg.title + "\" (pid " + strconv.Itoa(msg.pid) + ")"
+		}
 	case tea.KeyPressMsg:
 		key := msg.String()
 		if key == "ctrl+z" {
@@ -175,7 +188,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// A close confirmation is pending: only its own keys act.
 			switch key {
 			case "y", "enter":
-				a.confirmClose()
+				if cmd := a.confirmClose(); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
 			case "esc", "n":
 				a.cancelClose()
 			case "q", "ctrl+c":
@@ -241,33 +256,34 @@ func (a *App) cancelClose() {
 	a.nav.Notice = ""
 }
 
-// confirmClose validates and closes the frozen session, reporting the result in the notice. The
-// closer re-validates the record and the live process before signaling, so the frozen card here is
-// a first line of defence, not the last.
-func (a *App) confirmClose() {
+// confirmClose validates the frozen session and returns the command that closes it, so the
+// closer's I/O (reading the record, probing the process, signaling) never blocks Update; the
+// outcome comes back as a closeResultMsg. The closer re-validates the record and the live process
+// before signaling, so the frozen card here is a first line of defence, not the last. Failures
+// that need no I/O are reported in the notice right away and return nil.
+func (a *App) confirmClose() tea.Cmd {
 	p := a.nav.Close
 	a.nav.Close = model.ClosePrompt{}
 	if p.Key == "" {
-		return
+		return nil
 	}
 	if a.width < model.MinTermColumns || a.height < model.MinTermRows {
 		a.nav.Notice = "cannot close \"" + p.Title + "\": terminal too small"
-		return
+		return nil
 	}
 	if a.closer == nil {
 		a.nav.Notice = "cannot close \"" + p.Title + "\": close is not available"
-		return
+		return nil
 	}
 	card, ok := a.closeCard(p)
 	if !ok {
 		a.nav.Notice = "cannot close \"" + p.Title + "\": profile not found"
-		return
+		return nil
 	}
-	if err := a.closer.Close(card); err != nil {
-		a.nav.Notice = "cannot close \"" + p.Title + "\": " + err.Error()
-		return
+	c := a.closer
+	return func() tea.Msg {
+		return closeResultMsg{title: p.Title, pid: p.PID, err: c.Close(card)}
 	}
-	a.nav.Notice = "sent SIGTERM to \"" + p.Title + "\" (pid " + strconv.Itoa(p.PID) + ")"
 }
 
 // closeCard maps the frozen prompt to the card the closer reads, resolving the profile dir.
