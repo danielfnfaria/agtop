@@ -97,6 +97,7 @@ func (s *Store) scanOnce() {
 	if s.isStopped() {
 		return
 	}
+	s.rewatchGlobals()
 	now := s.deps.Clock.Now()
 	// scannedAt alone changing does not justify a new snapshot. The usage view takes part: it
 	// turns stale with time alone, and the next scan shows it.

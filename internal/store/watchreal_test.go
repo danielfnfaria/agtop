@@ -203,3 +203,53 @@ func TestCallsBeforeStartReturn(t *testing.T) {
 		t.Errorf("after Start: %s, %d paths", summary(s.Snapshot()), s.WatchedPathCount())
 	}
 }
+
+// A watched directory that is deleted and created again drops its watch; the scan must renew
+// the global watchers, or the registry stops being followed.
+func TestRealRegistryWatcherSurvivesSessionsDirReplacement(t *testing.T) {
+	tr := makeTree(t)
+	writeRegistry(t, tr, nil)
+	writeFile(t, tr.transcript, "")
+	s := realStore(t, tr, Deps{})
+	s.Start()
+
+	sessions := filepath.Dir(tr.registry(os.Getpid()))
+	if err := os.RemoveAll(sessions); err != nil {
+		t.Fatal(err)
+	}
+	mkdirAll(t, sessions)
+	s.Refresh() // the scan renews the watcher of the recreated directory
+
+	other := "sess-0002"
+	writeFile(t, filepath.Join(tr.project, other+".jsonl"), "")
+	now := nowMs()
+	registry := tr.registry(os.Getppid())
+	writeFile(t, registry, jsonOf(obj{"pid": os.Getppid(), "sessionId": other, "startedAt": now, "updatedAt": now}))
+	waitNudging(t, s, registry, func(x *Snapshot) bool { return len(x.Sessions) == 2 })
+}
+
+func TestRealUsageWatcherSurvivesDirReplacement(t *testing.T) {
+	tr := makeTree(t)
+	writeUsage(t, tr, nowMs(), 10, nowMs()+3_600_000)
+	s := realStore(t, tr, Deps{})
+	s.Start()
+	if got := fiveHourPercent(s.Snapshot()); got != 10 {
+		t.Fatalf("percent = %v", got)
+	}
+
+	if err := os.RemoveAll(filepath.Dir(usagePath(tr))); err != nil {
+		t.Fatal(err)
+	}
+	mkdirAll(t, filepath.Dir(usagePath(tr)))
+	s.Refresh()
+
+	for attempt := 0; ; attempt++ {
+		writeUsage(t, tr, nowMs(), float64(40+attempt), nowMs()+3_600_000)
+		if waitReal(s, func(x *Snapshot) bool { return fiveHourPercent(x) >= 40 }, time.Second) {
+			break
+		}
+		if attempt >= 7 {
+			t.Fatal("usage.json not followed after agtop/ was replaced")
+		}
+	}
+}

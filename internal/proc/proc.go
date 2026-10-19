@@ -5,6 +5,7 @@ package proc
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
 	"syscall"
 	"time"
@@ -74,7 +75,15 @@ func revalidateAndKill(pid int, sig syscall.Signal, want Info,
 	if !SameStart(want, now) {
 		return ErrIdentityChanged
 	}
-	return kill(pid, sig)
+	return notFoundIfGone(kill(pid, sig))
+}
+
+// notFoundIfGone turns ESRCH (the process exited meanwhile) into ErrNotFound, keeping the cause.
+func notFoundIfGone(err error) error {
+	if errors.Is(err, syscall.ESRCH) {
+		return fmt.Errorf("%w: %w", ErrNotFound, err)
+	}
+	return err
 }
 
 // MatchesExecutable reports whether a process is the program name: its name (comm) is name, or
