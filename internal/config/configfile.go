@@ -22,7 +22,7 @@ type FileData struct {
 // maxLabelLen bounds a profile label (in characters): it is shown in the header and in warnings.
 const maxLabelLen = 64
 
-var sections =[]string{"profiles", "theme", "glyphs", "layout"}
+var sections = []string{"profiles", "theme", "glyphs", "layout"}
 
 // ParseFile interprets the file text with a strict schema: only [profiles] (label -> path, or
 // label -> { provider, dir }),
