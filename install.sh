@@ -31,6 +31,7 @@ main() {
   fetch "$releases/download/v$version/$archive" "$tmp/$archive"
   fetch "$releases/download/v$version/checksums.txt" "$tmp/checksums.txt"
   verify "$tmp" "$archive"
+  verify_attestation "$tmp/$archive"
 
   tar -xzf "$tmp/$archive" -C "$tmp" agtop
   mkdir -p "$install_dir"
@@ -96,6 +97,19 @@ verify() {
     die "sha256sum or shasum is required to verify the download"
   fi
   [ "$expected" = "$actual" ] || die "checksum mismatch for $2"
+}
+
+# The checksum only proves integrity. The build provenance attestation proves the archive was
+# built by this repository's release workflow, so it is verified whenever gh is available.
+verify_attestation() {
+  if command -v gh >/dev/null 2>&1; then
+    say "verifying build provenance with gh"
+    gh attestation verify "$1" --repo danielfnfaria/agtop >/dev/null 2>&1 ||
+      die "build provenance verification failed for $1"
+  else
+    say "warning: gh not found; only the integrity (checksum) was verified, not the authenticity"
+    say "warning: install gh (https://cli.github.com) to also verify the build provenance"
+  fi
 }
 
 need() {
