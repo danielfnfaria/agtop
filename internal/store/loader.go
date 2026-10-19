@@ -6,6 +6,7 @@ import (
 
 	"github.com/danielfnfaria/agtop/internal/domain"
 	"github.com/danielfnfaria/agtop/internal/domain/reduce"
+	"github.com/danielfnfaria/agtop/internal/ingest/watcher"
 	"github.com/danielfnfaria/agtop/internal/source"
 )
 
@@ -157,6 +158,28 @@ func (s *Store) rewatchIfShort(e *sessionEntry) {
 	}
 	if e.watcher.WatchedPathCount() < want {
 		s.rewatch(e)
+	}
+}
+
+// rewatchGlobals renews the registry and usage watchers that lost every path: when the watched
+// directory (sessions/, agtop/, the one of opencode.db) is deleted or replaced the watch is
+// dropped and, without this, never comes back. A directory that is still gone is retried by the
+// next scan.
+func (s *Store) rewatchGlobals() {
+	for _, w := range s.globals {
+		s.rewatchIfLost(w, "registry")
+	}
+	for _, w := range s.usage.watchers() {
+		s.rewatchIfLost(w, "usage")
+	}
+}
+
+func (s *Store) rewatchIfLost(w watcher.Watcher, what string) {
+	if w.WatchedPathCount() > 0 {
+		return
+	}
+	if err := w.Rewatch(); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		s.pushError("watcher " + what + ": " + errorCode(err))
 	}
 }
 
