@@ -508,7 +508,12 @@ func TestCloseConfirm(t *testing.T) {
 	for _, confirmKey := range []string{"y", "enter"} {
 		t.Run(confirmKey, func(t *testing.T) {
 			a, fc := closeApp()
-			press(a, "down", "x", confirmKey)
+			cmd := press(a, "down", "x", confirmKey)
+			if len(fc.called) != 0 {
+				t.Fatalf("closer ran inside Update: %+v", fc.called)
+			}
+			mustNotContain(t, screen(a), "sent SIGTERM")
+			deliver(t, a, cmd)
 			if len(fc.called) != 1 {
 				t.Fatalf("closer called %d times", len(fc.called))
 			}
@@ -549,8 +554,22 @@ func TestCloseIgnoresOtherKeysWhileConfirming(t *testing.T) {
 func TestCloseErrorShowsNotice(t *testing.T) {
 	a, fc := closeApp()
 	fc.err = errors.New("process is not alive")
-	press(a, "down", "x", "y")
+	deliver(t, a, press(a, "down", "x", "y"))
 	mustContain(t, screen(a), `cannot close "My task": process is not alive`)
+}
+
+// deliver runs the close command (the fake closer does no I/O, no timers) and feeds its result to
+// the app, as the Bubble Tea runtime would.
+func deliver(t *testing.T, a *App, cmd tea.Cmd) {
+	t.Helper()
+	if cmd == nil {
+		t.Fatal("no close command")
+	}
+	msg, ok := cmd().(closeResultMsg)
+	if !ok {
+		t.Fatalf("command did not return a closeResultMsg")
+	}
+	a.Update(msg)
 }
 
 func TestCloseWithoutSelectionDoesNothing(t *testing.T) {
@@ -642,6 +661,55 @@ func TestCloseNotStartedOnSmallTerminal(t *testing.T) {
 	}
 	if len(fc.called) != 0 {
 		t.Fatalf("closer called: %+v", fc.called)
+	}
+}
+
+func TestTreeIsMemoized(t *testing.T) {
+	st := newFakeStore(snapshot([]*store.SessionView{sessionWithAgents(), session("claude:s2", nil)}, profiles))
+	a := newApp(testOptions(st, profiles), 100, 30)
+	fresh := func() treeModel {
+		return buildTreeModel(a.snap, a.profiles, a.nav, a.width, a.appearance.Glyphs.Line)
+	}
+	same := func(step string) {
+		t.Helper()
+		if got, want := a.tree(), fresh(); !reflect.DeepEqual(got, want) {
+			t.Fatalf("%s: cached tree differs from a fresh build", step)
+		}
+	}
+
+	same("initial")
+	before := a.treeBuilds
+	for range 5 {
+		a.tree()
+		a.Render()
+	}
+	// Timer messages and notices change nothing the tree reads.
+	a.Update(spinMsg{seq: a.spinSeq})
+	a.Update(clockMsg{})
+	if a.treeBuilds != before {
+		t.Fatalf("tree rebuilt %d times for equal inputs", a.treeBuilds-before)
+	}
+
+	// Every input invalidates: snapshot, width, open session, profile filter.
+	steps := []struct {
+		name string
+		do   func()
+	}{
+		{"snapshot", func() {
+			st.set(snapshot([]*store.SessionView{session("claude:s2", nil)}, profiles))
+			a.Update(snapshotMsg{snap: st.Snapshot()})
+		}},
+		{"width", func() { a.Update(tea.WindowSizeMsg{Width: 80, Height: 30}) }},
+		{"detail", func() { a.nav.DetailKey = "claude:s2" }},
+		{"filter", func() { a.nav.ProfileFilter = profiles[0].Label }},
+	}
+	for _, s := range steps {
+		n := a.treeBuilds
+		s.do()
+		same(s.name)
+		if a.treeBuilds == n {
+			t.Fatalf("%s: tree not rebuilt after the input changed", s.name)
+		}
 	}
 }
 
