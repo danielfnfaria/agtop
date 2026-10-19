@@ -4,6 +4,7 @@ package proc
 
 import (
 	"errors"
+	"fmt"
 	"syscall"
 
 	"golang.org/x/sys/unix"
@@ -20,7 +21,7 @@ func signal(pid int, sig syscall.Signal, want Info) error {
 			return revalidateAndKill(pid, sig, want, Lookup, unix.Kill)
 		}
 		if errors.Is(err, unix.ESRCH) {
-			return ErrNotFound
+			return fmt.Errorf("%w: %w", ErrNotFound, err)
 		}
 		return err
 	}
@@ -34,5 +35,5 @@ func signal(pid int, sig syscall.Signal, want Info) error {
 	if !SameStart(want, now) {
 		return ErrIdentityChanged
 	}
-	return unix.PidfdSendSignal(fd, sig, nil, 0)
+	return notFoundIfGone(unix.PidfdSendSignal(fd, sig, nil, 0))
 }

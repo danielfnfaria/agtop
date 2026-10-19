@@ -3,6 +3,7 @@ package proc
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"syscall"
 	"testing"
 	"time"
@@ -103,5 +104,30 @@ func TestLookupSelf(t *testing.T) {
 	}
 	if info.Start.IsZero() {
 		t.Error("start is unknown for a live process")
+	}
+}
+
+func TestRevalidateAndKillGoneProcess(t *testing.T) {
+	at := time.UnixMilli(1_700_000_000_000).UTC()
+	lookup := func(int) (Info, error) { return Info{Start: at}, nil }
+	kill := func(int, syscall.Signal) error { return syscall.ESRCH }
+	err := revalidateAndKill(4242, syscall.SIGTERM, Info{Start: at}, lookup, kill)
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+	if !errors.Is(err, syscall.ESRCH) {
+		t.Errorf("err = %v lost its ESRCH cause", err)
+	}
+}
+
+func TestSignalExitedProcess(t *testing.T) {
+	cmd := exec.Command("true")
+	if err := cmd.Run(); err != nil {
+		t.Fatal(err)
+	}
+	// The child was reaped: its pid names no process (a reuse in this window is negligible).
+	err := OSSignal{}.Signal(cmd.ProcessState.Pid(), syscall.SIGTERM, Info{Start: time.Now()})
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("err = %v, want ErrNotFound", err)
 	}
 }

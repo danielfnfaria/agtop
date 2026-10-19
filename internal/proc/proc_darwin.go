@@ -13,7 +13,8 @@ import (
 func Lookup(pid int) (Info, error) {
 	kp, err := unix.SysctlKinfoProc("kern.proc.pid", pid)
 	if err != nil {
-		if errors.Is(err, unix.ESRCH) || errors.Is(err, unix.ENOENT) {
+		// x/sys reports EIO when kern.proc.pid answers with no entry, i.e. the pid is gone.
+		if errors.Is(err, unix.ESRCH) || errors.Is(err, unix.ENOENT) || errors.Is(err, unix.EIO) {
 			return Info{}, ErrNotFound
 		}
 		return Info{}, err
