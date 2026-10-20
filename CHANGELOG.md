@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/danielfnfaria/agtop/compare/v0.2.0...v0.2.1) (2026-10-19)
+
+
+### Bug Fixes
+
+* harden input handling for home, config flag and profiles ([#14](https://github.com/danielfnfaria/agtop/issues/14)) ([861c626](https://github.com/danielfnfaria/agtop/commit/861c626f0f75aec7a4e91ffeb3c096369cb29465))
+* rewatch global watchers and map esrch to not found ([#15](https://github.com/danielfnfaria/agtop/issues/15)) ([4e073ea](https://github.com/danielfnfaria/agtop/commit/4e073ea8aaedef339ab1905dda4074e68427baa3))
+
 ## [0.2.0](https://github.com/danielfnfaria/agtop/compare/v0.1.0...v0.2.0) (2026-10-18)
 
 
