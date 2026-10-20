@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"maps"
 	"os"
 	"path/filepath"
@@ -45,7 +46,7 @@ func newFakeSource(t *testing.T, provider domain.ProviderID, dir string, registr
 
 func (s *fakeSource) Provider() domain.ProviderID { return s.provider }
 
-func (s *fakeSource) Discover(profiles []config.ProfileDir) (discovery.Result, error) {
+func (s *fakeSource) Discover(_ context.Context, profiles []config.ProfileDir) (discovery.Result, error) {
 	var out discovery.Result
 	for _, profile := range profiles {
 		pd := discovery.ProfileDiscovery{Profile: profile}
@@ -79,11 +80,13 @@ func (s *fakeSource) ForgetSession(profile config.ProfileDir, sessionID string) 
 	s.mu.Unlock()
 }
 
-func (s *fakeSource) OpenTranscript(ref string) (source.TranscriptReader, error) {
+func (s *fakeSource) OpenTranscript(_ context.Context, ref string) (source.TranscriptReader, error) {
 	return &fakeReader{path: ref}, nil
 }
 
-func (s *fakeSource) ListAgents(string, map[string]string) []discovery.SubagentFiles { return nil }
+func (s *fakeSource) ListAgents(context.Context, string, map[string]string) []discovery.SubagentFiles {
+	return nil
+}
 
 func (s *fakeSource) ReadAgentMeta(string) discovery.AgentMetaResult {
 	return discovery.AgentMetaResult{Code: "UNUSED"}
@@ -97,7 +100,7 @@ type fakeReader struct {
 	done bool
 }
 
-func (r *fakeReader) Read() (source.TranscriptRead, error) {
+func (r *fakeReader) Read(context.Context) (source.TranscriptRead, error) {
 	if r.done {
 		return source.TranscriptRead{}, nil
 	}

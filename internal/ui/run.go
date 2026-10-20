@@ -163,6 +163,7 @@ func Run(ctx context.Context, o Options) (exitCode int, err error) {
 	}
 	if st != nil && st.Err() != nil {
 		_, _ = fmt.Fprintf(stderr, "agtop: %v\n", st.Err())
+		// The store failure was already reported above; the exit code carries it.
 		return 1, nil
 	}
 	if runErr != nil {

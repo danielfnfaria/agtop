@@ -1,3 +1,4 @@
+// Command agtop is a terminal viewer for AI coding agent sessions.
 package main
 
 import (

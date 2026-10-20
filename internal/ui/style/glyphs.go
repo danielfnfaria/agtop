@@ -92,7 +92,7 @@ func (g *Glyphs) Slot(name string) *string {
 }
 
 // ProviderMark returns the provider's symbol, or the preset's replacement for it.
-func (g Glyphs) ProviderMark(symbol string) string {
+func (g *Glyphs) ProviderMark(symbol string) string {
 	if g.ProviderSymbol != "" {
 		return g.ProviderSymbol
 	}

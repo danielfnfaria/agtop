@@ -12,15 +12,23 @@ type Panel string
 type Direction string
 
 const (
-	ViewTree   View = "tree"
+	// ViewTree is the session tree.
+	ViewTree View = "tree"
+	// ViewDetail is the detail of one session.
 	ViewDetail View = "detail"
 
+	// PanelAgents is the agents panel of the detail view.
 	PanelAgents Panel = "agents"
-	PanelTools  Panel = "tools"
+	// PanelTools is the tools panel of the detail view.
+	PanelTools Panel = "tools"
 
-	DirUp    Direction = "up"
-	DirDown  Direction = "down"
-	DirLeft  Direction = "left"
+	// DirUp is the up arrow.
+	DirUp Direction = "up"
+	// DirDown is the down arrow.
+	DirDown Direction = "down"
+	// DirLeft is the left arrow.
+	DirLeft Direction = "left"
+	// DirRight is the right arrow.
 	DirRight Direction = "right"
 )
 
@@ -88,12 +96,19 @@ type NavContext struct {
 type ActionType int
 
 const (
+	// ActionMove moves the selection in a direction.
 	ActionMove ActionType = iota + 1
+	// ActionOpen opens the selected session.
 	ActionOpen
+	// ActionBack goes back to the previous view.
 	ActionBack
+	// ActionTab switches the focused panel.
 	ActionTab
+	// ActionToggleHelp shows or hides the help.
 	ActionToggleHelp
+	// ActionCycleProfile switches to the next profile.
 	ActionCycleProfile
+	// ActionClearNotice dismisses the current notice.
 	ActionClearNotice
 )
 

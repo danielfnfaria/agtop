@@ -104,12 +104,12 @@ func TestReduceSessionFixture(t *testing.T) {
 	t.Run("does not mutate the input state", func(t *testing.T) {
 		initial := NewSessionState("x")
 		snapshot := serialized(t, initial)
-		ReduceSessionEvents(initial, fixtureEvents(t, "session-main"))
+		SessionEvents(initial, fixtureEvents(t, "session-main"))
 		expectEqual(t, serialized(t, initial), snapshot)
 		// Nor an intermediate state: reducing more events leaves it as it was.
-		half := ReduceSessionEvents(NewSessionState("x"), fixtureEvents(t, "session-main")[:20])
+		half := SessionEvents(NewSessionState("x"), fixtureEvents(t, "session-main")[:20])
 		snapshot = serialized(t, half)
-		ReduceSessionEvents(half, fixtureEvents(t, "session-main")[20:])
+		SessionEvents(half, fixtureEvents(t, "session-main")[20:])
 		expectEqual(t, serialized(t, half), snapshot)
 	})
 }
@@ -118,7 +118,7 @@ func TestReduceSessionCases(t *testing.T) {
 	base := NewSessionState("s")
 
 	t.Run("intermediate state: launched before the tool_result", func(t *testing.T) {
-		s := ReduceSessionEvents(base, normalize(fixtureLines(t, "session-main")[:8]...))
+		s := SessionEvents(base, normalize(fixtureLines(t, "session-main")[:8]...))
 		expectMatch(t, agentOf(t, s, "toolu_agent_bg"), obj{
 			"toolUseId": "toolu_agent_bg", "status": "launched", "model": "haiku", "isBackground": true,
 		})
@@ -127,19 +127,19 @@ func TestReduceSessionCases(t *testing.T) {
 		}
 	})
 	t.Run("agent tool_result with is_error (no async_launched) fails it", func(t *testing.T) {
-		s := ReduceSessionEvents(base, events{
+		s := SessionEvents(base, events{
 			domain.AssistantMessageEvent{EventBase: at(1), ToolUses: []domain.ToolUseInfo{agentToolUse("t1", "d", false)}},
 			domain.ToolResultEvent{EventBase: at(2), ToolUseID: "t1", IsError: true},
 		})
 		expectMatch(t, agentOf(t, s, "t1"), obj{"status": "failed", "finishedAt": 2, "failureReason": "error"})
 	})
 	t.Run("unknown notification status is unknown; a final status is not overwritten", func(t *testing.T) {
-		s := ReduceSessionEvents(base, events{
+		s := SessionEvents(base, events{
 			launchResult("t9", "a9", 0),
 			domain.TaskNotificationEvent{TaskID: "a9", Status: "weird"},
 		})
 		expectEqual(t, agentOf(t, s, "a9").Status, domain.StatusUnknown)
-		s = ReduceSessionEvents(base, events{
+		s = SessionEvents(base, events{
 			launchResult("t9", "a9", 0),
 			domain.TaskNotificationEvent{TaskID: "a9", Status: "killed"},
 			domain.TaskNotificationEvent{TaskID: "a9", Status: "completed"},
@@ -157,18 +157,18 @@ func TestReduceSessionCases(t *testing.T) {
 			})
 		}
 		launch := launchResult("t9", "a9", 0)
-		once := ReduceSessionEvents(base, append(events{launch}, notify("killed", "2026-01-01T10:00:05.000Z")...))
+		once := SessionEvents(base, append(events{launch}, notify("killed", "2026-01-01T10:00:05.000Z")...))
 		expectEqual(t, agentOf(t, once, "a9").Status, domain.StatusFailed)
 		twice := events{launch}
 		twice = append(twice, notify("killed", "2026-01-01T10:00:05.000Z")...)
 		twice = append(twice, notify("killed", "2026-01-01T10:00:06.000Z")...)
 		twice = append(twice, domain.TaskNotificationEvent{TaskID: "a9", Status: "killed"})
-		expectEqual(t, agentOf(t, ReduceSessionEvents(base, twice), "a9"), agentOf(t, once, "a9"))
-		done := ReduceSessionEvents(base, append(events{launch}, notify("completed", "2026-01-01T10:00:05.000Z")...))
+		expectEqual(t, agentOf(t, SessionEvents(base, twice), "a9"), agentOf(t, once, "a9"))
+		done := SessionEvents(base, append(events{launch}, notify("completed", "2026-01-01T10:00:05.000Z")...))
 		expectEqual(t, agentOf(t, done, "a9").Status, domain.StatusCompleted)
 	})
 	t.Run("notification without <status> does not change the agent", func(t *testing.T) {
-		s := ReduceSessionEvents(base, events{
+		s := SessionEvents(base, events{
 			launchResult("t9", "a9", 0),
 			domain.TaskNotificationEvent{EventBase: at(5), TaskID: "a9"},
 		})
@@ -180,7 +180,7 @@ func TestReduceSessionCases(t *testing.T) {
 		launch := func(id string, background bool) domain.AssistantMessageEvent {
 			return domain.AssistantMessageEvent{EventBase: at(1), ToolUses: []domain.ToolUseInfo{agentToolUse(id, "d", background)}}
 		}
-		s := ReduceSessionEvents(base, events{
+		s := SessionEvents(base, events{
 			launch("t1", false),
 			launchResult("t1", "a1", 0),
 			domain.TaskNotificationEvent{TaskID: "a1", Status: "completed"},
@@ -191,7 +191,7 @@ func TestReduceSessionCases(t *testing.T) {
 		expectEqual(t, agentOf(t, s, "a2").IsBackground, true)
 	})
 	t.Run("peer handback completes the agent and does not reopen a final one", func(t *testing.T) {
-		s := ReduceSessionEvents(base, events{
+		s := SessionEvents(base, events{
 			launchResult("t1", "a1", 0),
 			domain.AgentHandbackEvent{EventBase: at(5), AgentID: "a1"},
 			domain.AgentHandbackEvent{EventBase: at(10), AgentID: "a1", Handback: true},
@@ -203,13 +203,13 @@ func TestReduceSessionCases(t *testing.T) {
 		expectEqual(t, s.LastUserPromptAt, 0)
 	})
 	t.Run("resumed agent (new tool_use, same agentId) is reopened", func(t *testing.T) {
-		s := ReduceSessionEvents(base, events{
+		s := SessionEvents(base, events{
 			domain.AssistantMessageEvent{EventBase: at(1), ToolUses: []domain.ToolUseInfo{agentToolUse("t1", "first", false)}},
 			launchResult("t1", "a1", 0),
 			domain.AgentHandbackEvent{EventBase: at(10), AgentID: "a1", Handback: true},
 		})
 		expectMatch(t, agentOf(t, s, "a1"), obj{"status": "completed", "finishedAt": 10})
-		s = ReduceSessionEvents(s, events{
+		s = SessionEvents(s, events{
 			domain.AssistantMessageEvent{EventBase: at(20), ToolUses: []domain.ToolUseInfo{agentToolUse("t2", "second", true)}},
 			launchResult("t2", "a1", 21),
 		})
@@ -217,21 +217,21 @@ func TestReduceSessionCases(t *testing.T) {
 		reopened := agentOf(t, s, "a1")
 		expectMatch(t, reopened, obj{"status": "launched", "toolUseId": "t2", "startedAt": 20, "description": "second", "isBackground": true})
 		expectEqual(t, reopened.FinishedAt, 0)
-		s = ReduceSession(s, domain.AgentHandbackEvent{EventBase: at(30), AgentID: "a1", Handback: true})
+		s = Session(s, domain.AgentHandbackEvent{EventBase: at(30), AgentID: "a1", Handback: true})
 		expectMatch(t, agentOf(t, s, "a1"), obj{"status": "completed", "finishedAt": 30})
 	})
 	t.Run("merge: status and finishedAt from the same side; between finals the most recent wins", func(t *testing.T) {
-		s := ReduceSessionEvents(base, events{
+		s := SessionEvents(base, events{
 			domain.AssistantMessageEvent{EventBase: at(1), ToolUses: []domain.ToolUseInfo{agentToolUse("t1", "d", true)}},
 			// Launch entry (key t1): failed at 10.
 			domain.TaskNotificationEvent{EventBase: at(10), ToolUseID: "t1", Status: "failed"},
 		})
 		// Agent transcript entry (key a1): completed at 30.
-		s = ReduceSessionAgentEvents(s, "a1", events{domain.UserPromptEvent{EventBase: at(2)}})
-		s = ReduceSession(s, domain.AgentHandbackEvent{EventBase: at(30), AgentID: "a1", Handback: true})
+		s = SessionAgentEvents(s, "a1", events{domain.UserPromptEvent{EventBase: at(2)}})
+		s = Session(s, domain.AgentHandbackEvent{EventBase: at(30), AgentID: "a1", Handback: true})
 		expectMatch(t, agentOf(t, s, "t1"), obj{"status": "failed", "finishedAt": 10})
 		expectMatch(t, agentOf(t, s, "a1"), obj{"status": "completed", "finishedAt": 30})
-		s = ReduceSession(s, launchResult("t1", "a1", 0))
+		s = Session(s, launchResult("t1", "a1", 0))
 		expectEqual(t, sortedKeys(s.Agents), []string{"a1"})
 		merged := agentOf(t, s, "a1")
 		expectMatch(t, merged, obj{"status": "completed", "finishedAt": 30, "toolUseId": "t1"})
@@ -241,49 +241,49 @@ func TestReduceSessionCases(t *testing.T) {
 		msg := func(model string) domain.AssistantMessageEvent {
 			return domain.AssistantMessageEvent{Model: model, ToolUses: []domain.ToolUseInfo{}}
 		}
-		s := ReduceSession(base, msg("claude-opus-5"))
+		s := Session(base, msg("claude-opus-5"))
 		expectEqual(t, s.Model, &domain.ModelInfo{ID: "claude-opus-5"})
-		s = ReduceSessionEvents(s, events{
+		s = SessionEvents(s, events{
 			domain.ModelAttachmentEvent{ModelID: "claude-opus-5[1m]", Name: "Claude Opus 5"},
 			msg("claude-opus-5"),
 		})
 		expectEqual(t, s.Model, &domain.ModelInfo{ID: "claude-opus-5[1m]", Name: "Claude Opus 5"})
-		s = ReduceSession(s, msg("claude-sonnet-5"))
+		s = Session(s, msg("claude-sonnet-5"))
 		expectEqual(t, s.Model, &domain.ModelInfo{ID: "claude-sonnet-5"})
 	})
 	t.Run("custom title wins over ai-title", func(t *testing.T) {
-		s := ReduceSessionEvents(base, events{
+		s := SessionEvents(base, events{
 			domain.AITitleEvent{Title: "ai 1"},
 			domain.CustomTitleEvent{Title: "mine"},
 			domain.AITitleEvent{Title: "ai 2"},
 		})
 		expectMatch(t, s, obj{"title": "mine", "titleSource": "custom", "customTitle": "mine", "aiTitle": "ai 2"})
-		expectMatch(t, ReduceSession(base, domain.AITitleEvent{Title: "ai"}), obj{"title": "ai", "titleSource": "ai"})
+		expectMatch(t, Session(base, domain.AITitleEvent{Title: "ai"}), obj{"title": "ai", "titleSource": "ai"})
 	})
 	t.Run("agents_killed: non-final become failed (killed); handed_back and final stay", func(t *testing.T) {
-		s := ReduceSessionEvents(base, events{
+		s := SessionEvents(base, events{
 			launchResult("t1", "a1", 0),
 			launchResult("t2", "a2", 0),
 			launchResult("t3", "a3", 0),
 			domain.AgentHandbackEvent{EventBase: at(5), AgentID: "a2", Handback: true},
 		})
-		s = ReduceSessionAgentEvents(s, "a3", events{
+		s = SessionAgentEvents(s, "a3", events{
 			domain.AssistantMessageEvent{EventBase: at(6), ToolUses: []domain.ToolUseInfo{{ID: "h", Name: HandbackToolName}}},
 		})
-		s = ReduceSession(s, domain.AgentsKilledEvent{EventBase: at(9)})
+		s = Session(s, domain.AgentsKilledEvent{EventBase: at(9)})
 		expectMatch(t, agentOf(t, s, "a1"), obj{"status": "failed", "failureReason": "killed", "finishedAt": 9})
 		expectMatch(t, agentOf(t, s, "a2"), obj{"status": "completed", "finishedAt": 5})
 		expectMatch(t, agentOf(t, s, "a3"), obj{"status": "handed_back", "finishedAt": 6})
 	})
 	t.Run("turn_end clears the pending tools", func(t *testing.T) {
-		s := ReduceSessionEvents(base, events{
+		s := SessionEvents(base, events{
 			domain.AssistantMessageEvent{ToolUses: []domain.ToolUseInfo{{ID: "b", Name: "Bash"}}},
 			domain.TurnEndEvent{},
 		})
 		expectEqual(t, s.PendingTools, []domain.PendingEntry{})
 	})
 	t.Run("<synthetic> message changes neither model nor context", func(t *testing.T) {
-		s := ReduceSessionEvents(base, events{
+		s := SessionEvents(base, events{
 			domain.AssistantMessageEvent{MessageID: "m1", Model: "claude-test-1",
 				Usage: &domain.TokenTotals{Input: 1, Output: 1, CacheRead: 10}, ToolUses: []domain.ToolUseInfo{}},
 			domain.AssistantMessageEvent{Model: domain.SyntheticModel, Usage: &domain.TokenTotals{}, ToolUses: []domain.ToolUseInfo{}},
@@ -292,7 +292,7 @@ func TestReduceSessionCases(t *testing.T) {
 		expectEqual(t, s.Context, domain.ContextCounter{Used: 11, LastMessageID: "m1"})
 	})
 	t.Run("a different usage for the same message.id replaces the previous one", func(t *testing.T) {
-		s := ReduceSessionEvents(base, events{
+		s := SessionEvents(base, events{
 			domain.AssistantMessageEvent{MessageID: "m1", Usage: &domain.TokenTotals{Input: 1, Output: 1}, ToolUses: []domain.ToolUseInfo{}},
 			domain.AssistantMessageEvent{MessageID: "m1", Usage: &domain.TokenTotals{Input: 1, Output: 9}, ToolUses: []domain.ToolUseInfo{}},
 		})
@@ -301,13 +301,13 @@ func TestReduceSessionCases(t *testing.T) {
 	t.Run("ignored event counts and keeps the rest", func(t *testing.T) {
 		want := base
 		want.Ignored = 1
-		expectEqual(t, ReduceSession(base, domain.IgnoredEvent{LineType: "x"}), want)
+		expectEqual(t, Session(base, domain.IgnoredEvent{LineType: "x"}), want)
 	})
 }
 
 func reduceAgentEvents(state domain.AgentState, evs events) domain.AgentState {
 	for _, e := range evs {
-		state = ReduceAgent(state, e)
+		state = Agent(state, e)
 	}
 	return state
 }
@@ -332,7 +332,7 @@ func TestReduceAgentFixture(t *testing.T) {
 			Name: "Read", Target: "/home/dev/projects/demo-app/README", StartedAt: t0 + 6000}}})
 	})
 	t.Run("session -> agent order: the notification's completed wins", func(t *testing.T) {
-		s := ReduceSessionAgentEvents(mainSession(t), "a-bg-001", sub)
+		s := SessionAgentEvents(mainSession(t), "a-bg-001", sub)
 		expectMatch(t, agentOf(t, s, "a-bg-001"), obj{
 			"status": "completed", "type": "explorer",
 			"totals": obj{"input": 6, "output": 36, "cacheRead": 1750, "cacheCreate": 65},
@@ -343,10 +343,10 @@ func TestReduceAgentFixture(t *testing.T) {
 		}
 	})
 	t.Run("agent -> session order: entries merged into one", func(t *testing.T) {
-		s := ReduceSessionAgentEvents(NewSessionState("sess-0001"), "a-bg-001", sub)
+		s := SessionAgentEvents(NewSessionState("sess-0001"), "a-bg-001", sub)
 		expectEqual(t, agentOf(t, s, "a-bg-001").Status, domain.StatusHandedBack)
 		// Only the launch (up to the async_launched tool_result).
-		s = ReduceSessionEvents(s, normalize(fixtureLines(t, "session-main")[:9]...))
+		s = SessionEvents(s, normalize(fixtureLines(t, "session-main")[:9]...))
 		expectEqual(t, len(s.Agents), 1)
 		expectMatch(t, agentOf(t, s, "a-bg-001"), obj{
 			"toolUseId": "toolu_agent_bg", "type": "explorer", "description": "Scan repo",
@@ -369,7 +369,7 @@ func TestReduceAgentFixture(t *testing.T) {
 		expectMatch(t, a, obj{"status": "handed_back", "finishedAt": 10, "lastActivityAt": 12})
 		expectEqual(t, len(a.PendingTools), 0)
 		// Resumed agent: a new message to it reopens it.
-		resumed := ReduceAgent(a, domain.UserPromptEvent{EventBase: at(20), IsMeta: true})
+		resumed := Agent(a, domain.UserPromptEvent{EventBase: at(20), IsMeta: true})
 		expectEqual(t, resumed.Status, domain.StatusRunning)
 		expectEqual(t, resumed.FinishedAt, 0)
 	})
@@ -388,13 +388,13 @@ func TestApplyAgentMeta(t *testing.T) {
 		s := ApplyAgentMeta(NewSessionState("s"), "a1", domain.AgentMeta{Model: "claude-test-1", StoppedByUser: true})
 		expectMatch(t, agentOf(t, s, "a1"), obj{"model": "claude-test-1", "status": "failed", "failureReason": "stopped"})
 		withModel := ApplyAgentMeta(
-			ReduceSession(NewSessionState("s"), domain.ToolResultEvent{ToolUseID: "t1",
+			Session(NewSessionState("s"), domain.ToolResultEvent{ToolUseID: "t1",
 				AgentLaunch: &domain.AgentLaunchResult{AgentID: "a1", ResolvedModel: "claude-resolved"}}),
 			"a1", domain.AgentMeta{Model: "claude-test-1"})
 		expectMatch(t, agentOf(t, withModel, "a1"), obj{"model": "claude-resolved", "status": "launched"})
 	})
 	t.Run("rekeys the launched agent (found by toolUseId) without overwriting the tool_use data", func(t *testing.T) {
-		launched := ReduceSession(NewSessionState("s"), domain.AssistantMessageEvent{ToolUses: []domain.ToolUseInfo{
+		launched := Session(NewSessionState("s"), domain.AssistantMessageEvent{ToolUses: []domain.ToolUseInfo{
 			{ID: "toolu_1", Name: "Agent", AgentLaunch: &domain.AgentLaunchRequest{Type: "reviewer", Description: "Review"}}}})
 		s := ApplyAgentMeta(launched, "a1", domain.AgentMeta{AgentType: "other", Description: "Other", ToolUseID: "toolu_1", SpawnDepth: ptr(2)})
 		expectEqual(t, sortedKeys(s.Agents), []string{"a1"})
@@ -420,39 +420,39 @@ func TestSessionActivityHistogram(t *testing.T) {
 	})
 	t.Run("assistant lines of the sub-agent count in the session histogram", func(t *testing.T) {
 		sub := fixtureEvents(t, "subagent-handback")
-		s := ReduceSessionAgentEvents(mainSession(t), "a-bg-001", sub)
+		s := SessionAgentEvents(mainSession(t), "a-bg-001", sub)
 		// Sub-agent: sm_01 (2 lines, 1 Read), sm_02 (Grep) and sm_03 (handback) = 6.
 		expectEqual(t, histogram(s), hist{t0: 14, t0 + 2*b: 3})
 		// Even without the session having seen the launch.
-		expectEqual(t, histogram(ReduceSessionAgentEvents(NewSessionState("s"), "a-bg-001", sub)), hist{t0: 6})
+		expectEqual(t, histogram(SessionAgentEvents(NewSessionState("s"), "a-bg-001", sub)), hist{t0: 6})
 	})
 	t.Run("counts even when the agent does not change (e.g. already final)", func(t *testing.T) {
-		s := ReduceSessionAgentEvents(NewSessionState("s"), "a1", events{
+		s := SessionAgentEvents(NewSessionState("s"), "a1", events{
 			domain.AssistantMessageEvent{EventBase: at(t0), ToolUses: []domain.ToolUseInfo{{ID: "h", Name: HandbackToolName}}},
 		})
 		s = ApplyAgentMeta(s, "a1", domain.AgentMeta{StoppedByUser: true})
 		before := agentOf(t, s, "a1")
-		s = ReduceSessionAgentEvents(s, "a1", events{domain.AssistantMessageEvent{EventBase: at(t0), ToolUses: []domain.ToolUseInfo{}}})
+		s = SessionAgentEvents(s, "a1", events{domain.AssistantMessageEvent{EventBase: at(t0), ToolUses: []domain.ToolUseInfo{}}})
 		// Without message.id each line is a new response: (1 + 1) + 1.
 		expectEqual(t, histogram(s), hist{t0: 3})
 		expectEqual(t, agentOf(t, s, "a1").Status, before.Status)
 	})
 	t.Run("synthetic, no timestamp and user/tool_result lines do not count", func(t *testing.T) {
-		s := ReduceSessionEvents(NewSessionState("s"), events{
+		s := SessionEvents(NewSessionState("s"), events{
 			domain.AssistantMessageEvent{EventBase: at(t0), Model: domain.SyntheticModel, ToolUses: []domain.ToolUseInfo{}},
 			domain.AssistantMessageEvent{ToolUses: []domain.ToolUseInfo{{ID: "t1", Name: "Bash"}}},
 			domain.UserPromptEvent{EventBase: at(t0)},
 			domain.ToolResultEvent{EventBase: at(t0), ToolUseID: "t1"},
 		})
 		expectEqual(t, len(s.ActivityHistogram), 0)
-		viaAgent := ReduceSessionAgentEvents(NewSessionState("s"), "a1", events{
+		viaAgent := SessionAgentEvents(NewSessionState("s"), "a1", events{
 			domain.AssistantMessageEvent{EventBase: at(t0), Model: domain.SyntheticModel, ToolUses: []domain.ToolUseInfo{}},
 			domain.AssistantMessageEvent{ToolUses: []domain.ToolUseInfo{}},
 		})
 		expectEqual(t, len(viaAgent.ActivityHistogram), 0)
 	})
 	t.Run("two tool_use in one line weigh 2, plus 1 for the response", func(t *testing.T) {
-		s := ReduceSession(NewSessionState("s"), domain.AssistantMessageEvent{EventBase: at(t0 + 1000),
+		s := Session(NewSessionState("s"), domain.AssistantMessageEvent{EventBase: at(t0 + 1000),
 			ToolUses: []domain.ToolUseInfo{{ID: "a", Name: "Read"}, {ID: "b", Name: "Grep"}}})
 		expectEqual(t, histogram(s), hist{t0: 3})
 	})
@@ -462,28 +462,28 @@ func TestSessionActivityHistogram(t *testing.T) {
 			domain.AssistantMessageEvent{EventBase: at(t0), MessageID: "m1", Usage: usage, ToolUses: []domain.ToolUseInfo{}},
 			domain.AssistantMessageEvent{EventBase: at(t0), MessageID: "m1", Usage: usage, ToolUses: []domain.ToolUseInfo{{ID: "t", Name: "Bash"}}},
 		}
-		s := ReduceSessionEvents(NewSessionState("s"), lines)
+		s := SessionEvents(NewSessionState("s"), lines)
 		expectEqual(t, histogram(s), hist{t0: 2})
 		// The agent has its own tracking: the same id seen in the session counts again in it.
-		expectEqual(t, histogram(ReduceSessionAgentEvents(s, "a1", lines)), hist{t0: 4})
+		expectEqual(t, histogram(SessionAgentEvents(s, "a1", lines)), hist{t0: 4})
 	})
 	t.Run("a response with message.id and no usage counts once, totals untouched", func(t *testing.T) {
 		lines := events{
 			domain.AssistantMessageEvent{EventBase: at(t0), MessageID: "m1", ToolUses: []domain.ToolUseInfo{}},
 			domain.AssistantMessageEvent{EventBase: at(t0), MessageID: "m1", ToolUses: []domain.ToolUseInfo{}},
 		}
-		s := ReduceSessionEvents(NewSessionState("s"), lines)
+		s := SessionEvents(NewSessionState("s"), lines)
 		expectEqual(t, histogram(s), hist{t0: 1})
 		expectEqual(t, s.Totals, domain.TokenTotals{})
 		expectEqual(t, s.Context, domain.ContextCounter{})
 		// The usage that arrives later for the same id enters the totals (once) and does not
 		// count again.
-		later := ReduceSession(s, domain.AssistantMessageEvent{EventBase: at(t0), MessageID: "m1",
+		later := Session(s, domain.AssistantMessageEvent{EventBase: at(t0), MessageID: "m1",
 			Usage: &domain.TokenTotals{Input: 2, Output: 3}, ToolUses: []domain.ToolUseInfo{}})
 		expectEqual(t, histogram(later), hist{t0: 1})
 		expectEqual(t, later.Totals, domain.TokenTotals{Input: 2, Output: 3})
 		// Same in the agent.
-		viaAgent := ReduceSessionAgentEvents(NewSessionState("s"), "a1", lines)
+		viaAgent := SessionAgentEvents(NewSessionState("s"), "a1", lines)
 		expectEqual(t, histogram(viaAgent), hist{t0: 1})
 		expectEqual(t, agentOf(t, viaAgent, "a1").Totals, s.Totals)
 	})
@@ -493,23 +493,23 @@ func TestSessionActivityHistogram(t *testing.T) {
 		withID.MessageID = "m1"
 		withID.Usage = usage
 		// Session: 1 for the response + 2 tool_use; the repetition adds nothing.
-		s := ReduceSessionEvents(NewSessionState("s"), events{withID, withID})
+		s := SessionEvents(NewSessionState("s"), events{withID, withID})
 		expectEqual(t, histogram(s), hist{t0: 3})
 		// Without message.id the response counts again, but the tool_use already seen do not.
-		expectEqual(t, histogram(ReduceSessionEvents(NewSessionState("s"), events{line, line})), hist{t0: 4})
+		expectEqual(t, histogram(SessionEvents(NewSessionState("s"), events{line, line})), hist{t0: 4})
 		// Agent: deduplicated in the agent's own state.
-		viaAgent := ReduceSessionAgentEvents(NewSessionState("s"), "a1", events{withID, withID})
+		viaAgent := SessionAgentEvents(NewSessionState("s"), "a1", events{withID, withID})
 		expectEqual(t, histogram(viaAgent), hist{t0: 3})
 		expectEqual(t, agentOf(t, viaAgent, "a1").SeenToolUseIDs, []string{"t1", "t2"})
 		// The session and the agent track apart: the agent line counts the first time.
-		expectEqual(t, histogram(ReduceSessionAgentEvents(s, "a1", events{withID})), hist{t0: 6})
+		expectEqual(t, histogram(SessionAgentEvents(s, "a1", events{withID})), hist{t0: 6})
 	})
 	t.Run("seenToolUseIds keeps only the most recent (MaxSeenToolUses)", func(t *testing.T) {
 		var many events
 		for i := range domain.MaxSeenToolUses + 2 {
 			many = append(many, domain.AssistantMessageEvent{ToolUses: []domain.ToolUseInfo{{ID: fmt.Sprintf("t%d", i), Name: "Read"}}})
 		}
-		s := ReduceSessionEvents(NewSessionState("s"), many)
+		s := SessionEvents(NewSessionState("s"), many)
 		expectEqual(t, len(s.SeenToolUseIDs), domain.MaxSeenToolUses)
 		expectEqual(t, slices.Contains(s.SeenToolUseIDs, "t0"), false)
 		expectEqual(t, slices.Contains(s.SeenToolUseIDs, "t1"), false)
@@ -530,7 +530,7 @@ func TestHugeTokenCountsSaturate(t *testing.T) {
 	var evs []domain.TranscriptEvent
 	evs = append(evs, line()...)
 	evs = append(evs, line()...)
-	s := ReduceSessionEvents(NewSessionState("s"), evs)
+	s := SessionEvents(NewSessionState("s"), evs)
 	for _, v := range []int{s.Totals.Input, s.Totals.Output, s.Context.Used} {
 		if v < 0 || v > domain.MaxSafeInt {
 			t.Errorf("total %d out of [0, 2^53-1]", v)

@@ -34,8 +34,9 @@ const (
 type Liveness string
 
 const (
+	// Alive means the session is still in the live set.
 	Alive Liveness = "alive"
-	// Stale: left the registry or the process died; goes away after StaleMs.
+	// Stale means the session left the registry or the process died; goes away after StaleMs.
 	Stale Liveness = "stale"
 )
 

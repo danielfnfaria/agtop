@@ -49,6 +49,7 @@ type OSFS struct{}
 
 var _ FS = OSFS{}
 
+// ReadDir returns the entry names of directory p.
 func (OSFS) ReadDir(p string) ([]string, error) {
 	entries, err := os.ReadDir(p)
 	if err != nil {
@@ -61,6 +62,7 @@ func (OSFS) ReadDir(p string) ([]string, error) {
 	return names, nil
 }
 
+// Stat describes p, following symlinks.
 func (OSFS) Stat(p string) (Info, error) {
 	st, err := os.Stat(p)
 	if err != nil {
@@ -75,8 +77,10 @@ func (OSFS) Stat(p string) (Info, error) {
 	}, nil
 }
 
+// Realpath resolves symlinks in p.
 func (OSFS) Realpath(p string) (string, error) { return filepath.EvalSymlinks(p) }
 
+// ReadFile reads the file p as a string; it fails if p is larger than maxBytes.
 func (OSFS) ReadFile(p string, maxBytes int) (string, error) {
 	f, err := os.Open(p)
 	if err != nil {

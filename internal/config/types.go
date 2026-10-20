@@ -12,9 +12,12 @@ import (
 type ProfileSource string
 
 const (
-	SourceConfig          ProfileSource = "config"
+	// SourceConfig means the directory was set in the config file.
+	SourceConfig ProfileSource = "config"
+	// SourceClaudeConfigDir means the directory came from CLAUDE_CONFIG_DIR.
 	SourceClaudeConfigDir ProfileSource = "claude-config-dir"
-	SourceDefault         ProfileSource = "default"
+	// SourceDefault means the built-in default directory.
+	SourceDefault ProfileSource = "default"
 )
 
 // ProfileDir is a Claude Code config directory to watch.
@@ -63,7 +66,7 @@ type Env map[string]string
 func EnvFromOS() Env {
 	env := Env{}
 	for _, kv := range os.Environ() {
-		for i := 0; i < len(kv); i++ {
+		for i := range len(kv) {
 			if kv[i] == '=' {
 				env[kv[:i]] = kv[i+1:]
 				break

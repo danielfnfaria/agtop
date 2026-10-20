@@ -14,12 +14,14 @@ type OSFS struct{}
 
 var _ FS = OSFS{}
 
+// IsDirectory reports whether p is an existing directory (symlinks are followed).
 func (OSFS) IsDirectory(p string) bool {
 	// Any failure (ENOENT, ENOTDIR, EACCES, ELOOP...) means "not a usable directory".
 	info, err := os.Stat(p)
 	return err == nil && info.IsDir()
 }
 
+// IsRegularFile reports whether p is an existing regular file (symlinks are followed).
 func (OSFS) IsRegularFile(p string) bool {
 	info, err := os.Stat(p)
 	return err == nil && info.Mode().IsRegular()
@@ -42,7 +44,7 @@ func canonicalCase(p string) string {
 	vol := filepath.VolumeName(p)
 	rest := strings.TrimPrefix(p, vol)
 	cur := vol + string(filepath.Separator)
-	for _, name := range strings.Split(rest, string(filepath.Separator)) {
+	for name := range strings.SplitSeq(rest, string(filepath.Separator)) {
 		if name == "" {
 			continue
 		}
@@ -72,6 +74,7 @@ func matchCase(dir, name string) string {
 	return name
 }
 
+// ReadFile returns the content of p and whether it exists; a missing path or a non-file is not an error.
 func (OSFS) ReadFile(p string) (string, bool, error) {
 	b, err := os.ReadFile(p)
 	if err == nil {
@@ -83,6 +86,7 @@ func (OSFS) ReadFile(p string) (string, bool, error) {
 	return "", false, err // EACCES etc.: the loader reports it with the path
 }
 
+// ListDir returns the entry names of p, or nil if it cannot be read.
 func (OSFS) ListDir(p string) []string {
 	entries, err := os.ReadDir(p)
 	if err != nil {
@@ -95,8 +99,10 @@ func (OSFS) ListDir(p string) []string {
 	return names
 }
 
+// MkdirAll creates p and any missing parents with perm.
 func (OSFS) MkdirAll(p string, perm fs.FileMode) error { return os.MkdirAll(p, perm) }
 
+// CreateExcl creates p with data and perm, failing if it already exists.
 func (OSFS) CreateExcl(p, data string, perm fs.FileMode) error {
 	f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
 	if err != nil {

@@ -147,11 +147,9 @@ func searchProjects(fs FS, root ContainmentRoot, sessionID string) (string, proj
 		probes := make([]projectProbe, len(batch))
 		var wg sync.WaitGroup
 		for j, name := range batch {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				probes[j] = probeProject(fs, root, name, sessionID)
-			}()
+			})
 		}
 		wg.Wait()
 		for j, found := range probes {
@@ -188,15 +186,15 @@ func resolveKind(fs FS, root ContainmentRoot, candidate string, kind entryKind) 
 	if strings.HasPrefix(candidate, root.Real+string(filepath.Separator)) {
 		lexicalRoot = root.Real
 	}
-	real, ok := ResolveContained(fs, ContainmentRoot{Dir: lexicalRoot, Real: root.Real}, candidate)
+	resolved, ok := ResolveContained(fs, ContainmentRoot{Dir: lexicalRoot, Real: root.Real}, candidate)
 	if !ok {
 		return "", false
 	}
-	info, err := fs.Stat(real)
+	info, err := fs.Stat(resolved)
 	if err != nil || (kind == kindFile && !info.IsFile) || (kind == kindDir && !info.IsDir) {
 		return "", false
 	}
-	return real, true
+	return resolved, true
 }
 
 func readCustomTitle(fs FS, root ContainmentRoot, sessionDir string) string {

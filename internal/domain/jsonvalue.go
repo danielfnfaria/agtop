@@ -3,6 +3,7 @@ package domain
 import (
 	"encoding/json"
 	"math"
+	"slices"
 )
 
 // Helpers over values decoded with encoding/json into `any`, for the strict validators.
@@ -21,14 +22,7 @@ func asRecord(v any) (map[string]any, bool) {
 
 func onlyKeys(m map[string]any, allowed ...string) bool {
 	for k := range m {
-		found := false
-		for _, a := range allowed {
-			if k == a {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if !slices.Contains(allowed, k) {
 			return false
 		}
 	}

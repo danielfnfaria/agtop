@@ -61,7 +61,7 @@ func prNumbers(prs []domain.PullRequestRef) []int {
 }
 
 func sessionOf(lines ...string) domain.SessionState {
-	return ReduceSessionEvents(NewSessionState("s"), normalize(lines...))
+	return SessionEvents(NewSessionState("s"), normalize(lines...))
 }
 
 func TestReducerPullRequests(t *testing.T) {
@@ -80,7 +80,7 @@ func TestReducerPullRequests(t *testing.T) {
 		for i := range 8 {
 			links = append(links, prURL(100+i, "app"))
 		}
-		s := ReduceSessionEvents(before, normalize(
+		s := SessionEvents(before, normalize(
 			toolUseLine(t, "m2", "t1", "Read", obj{"file_path": "/repo/CHANGELOG.md"}, nil),
 			toolResultLine(t, "t1", strings.Join(links, "\n")),
 		))
@@ -129,13 +129,13 @@ func TestReducerPullRequests(t *testing.T) {
 			toolUseLine(t, "am3", "at2", "Read", obj{"file_path": "/x/CHANGELOG.md"}, agentExtra),
 			toolResultLine(t, "at2", "changelog "+prURL(22, "lib")),
 		)
-		s := ReduceSessionAgentEvents(base, "ag-1", agentEvents)
+		s := SessionAgentEvents(base, "ag-1", agentEvents)
 		expectEqual(t, s.PullRequests, []domain.PullRequestRef{pr(1, "app"), pr(20, "lib"), pr(21, "lib")})
 		expectEqual(t, agentOf(t, s, "ag-1").PullRequests, []domain.PullRequestRef{pr(20, "lib"), pr(21, "lib")})
 	})
 	t.Run("no PR in the event: the list keeps its identity", func(t *testing.T) {
 		s := sessionOf(assistantText(t, "m1", "x "+prURL(1, "app"), nil))
-		next := ReduceSession(s, domain.UserPromptEvent{})
+		next := Session(s, domain.UserPromptEvent{})
 		if !sameSlice(next.PullRequests, s.PullRequests) {
 			t.Error("pull request list copied")
 		}

@@ -8,6 +8,7 @@
 package claudecode
 
 import (
+	"context"
 	"path/filepath"
 
 	"github.com/danielfnfaria/agtop/internal/config"
@@ -38,16 +39,16 @@ func New(deps discovery.Deps, newTailer func(path string) (Tailer, error)) sourc
 
 func (claudeCode) Provider() domain.ProviderID { return domain.ClaudeCode }
 
-func (c claudeCode) Discover(profiles []config.ProfileDir) (discovery.Result, error) {
+func (c claudeCode) Discover(_ context.Context, profiles []config.ProfileDir) (discovery.Result, error) {
 	return discovery.DiscoverLiveSessions(profiles, c.deps), nil
 }
 
 func (c claudeCode) RegistryWatch(profile config.ProfileDir) (watcher.Target, bool) {
-	real, err := c.deps.FS.Realpath(filepath.Join(profile.Dir, "sessions"))
+	realPath, err := c.deps.FS.Realpath(filepath.Join(profile.Dir, "sessions"))
 	if err != nil {
 		return watcher.Target{}, false
 	}
-	return watcher.Target{Kind: watcher.KindSessions, Root: real}, true
+	return watcher.Target{Kind: watcher.KindSessions, Root: realPath}, true
 }
 
 func (claudeCode) SessionWatch(transcriptRef, agentsRef string) (watcher.Target, bool) {
@@ -65,7 +66,7 @@ func (c claudeCode) ForgetSession(profile config.ProfileDir, sessionID string) {
 	}
 }
 
-func (c claudeCode) ListAgents(agentsDir string, resolved map[string]string) []discovery.SubagentFiles {
+func (c claudeCode) ListAgents(_ context.Context, agentsDir string, resolved map[string]string) []discovery.SubagentFiles {
 	return discovery.ListSubagents(c.deps.FS, agentsDir, resolved)
 }
 
@@ -77,7 +78,7 @@ func (c claudeCode) FileSignature(file string) (string, bool) {
 	return discovery.StatSignature(c.deps.FS, file)
 }
 
-func (c claudeCode) OpenTranscript(ref string) (source.TranscriptReader, error) {
+func (c claudeCode) OpenTranscript(_ context.Context, ref string) (source.TranscriptReader, error) {
 	t, err := c.newTailer(ref)
 	if err != nil {
 		return nil, err
@@ -91,7 +92,7 @@ type fileReader struct {
 	tailer Tailer
 }
 
-func (r *fileReader) Read() (source.TranscriptRead, error) {
+func (r *fileReader) Read(context.Context) (source.TranscriptRead, error) {
 	res, err := r.tailer.Read()
 	if err != nil {
 		return source.TranscriptRead{}, err

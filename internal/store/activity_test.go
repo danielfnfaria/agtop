@@ -48,7 +48,7 @@ func mainFixtureActivity(t *testing.T) domain.ActivityHistogram {
 	for _, l := range fixtureLines(t, "session-main.jsonl") {
 		events = append(events, transcript.NormalizeLine(l)...)
 	}
-	return reduce.ReduceSessionEvents(reduce.NewSessionState(sid), events).ActivityHistogram
+	return reduce.SessionEvents(reduce.NewSessionState(sid), events).ActivityHistogram
 }
 
 func activityOf(t *testing.T, s *Snapshot, label string) domain.ActivityHistogram {

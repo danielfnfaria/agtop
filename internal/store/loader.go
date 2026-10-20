@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 
@@ -54,8 +55,11 @@ func (s *Store) openTranscript(e *sessionEntry, ref string) (source.TranscriptRe
 	if src == nil {
 		return nil, nil
 	}
-	t, err := src.OpenTranscript(ref)
+	t, err := src.OpenTranscript(s.ctx, ref)
 	if err != nil {
+		if s.cancelled(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	if !s.track(t) {
@@ -190,8 +194,11 @@ func (s *Store) readMain(e *sessionEntry) (bool, error) {
 	if t == nil || file == "" {
 		return true, nil
 	}
-	res, err := t.Read()
+	res, err := t.Read(s.ctx)
 	if err != nil {
+		if s.cancelled(err) {
+			return true, nil
+		}
 		s.pushError("read " + file + ": " + errorCode(err))
 		return true, nil
 	}
@@ -207,7 +214,7 @@ func (s *Store) readMain(e *sessionEntry) (bool, error) {
 	if len(res.Events) == 0 {
 		return true, nil
 	}
-	e.setState(reduce.ReduceSessionEvents(e.state, res.Events))
+	e.setState(reduce.SessionEvents(e.state, res.Events))
 	s.changed()
 	return true, nil
 }
@@ -218,8 +225,11 @@ func (s *Store) readAgent(e *sessionEntry, a *agentEntry) (bool, error) {
 	if t == nil || file == "" {
 		return true, nil
 	}
-	res, err := t.Read()
+	res, err := t.Read(s.ctx)
 	if err != nil {
+		if s.cancelled(err) {
+			return true, nil
+		}
 		s.pushError("read " + file + ": " + errorCode(err))
 		return true, nil
 	}
@@ -235,7 +245,7 @@ func (s *Store) readAgent(e *sessionEntry, a *agentEntry) (bool, error) {
 	if len(res.Events) == 0 {
 		return true, nil
 	}
-	e.setState(reduce.ReduceSessionAgentEvents(e.state, a.agentID, res.Events))
+	e.setState(reduce.SessionAgentEvents(e.state, a.agentID, res.Events))
 	s.changed()
 	return true, nil
 }
@@ -277,7 +287,7 @@ func (s *Store) syncAgents(e *sessionEntry) error {
 	if dir == "" || s.isStopped() {
 		return nil
 	}
-	files := s.sourceOf(e.provider).ListAgents(dir, e.subagentNames)
+	files := s.sourceOf(e.provider).ListAgents(s.ctx, dir, e.subagentNames)
 	if s.isStopped() || e.removed || e.subagentsDir != dir {
 		return nil
 	}
@@ -353,4 +363,10 @@ func (s *Store) syncSession(e *sessionEntry) error {
 		return err
 	}
 	return s.syncAgents(e)
+}
+
+// cancelled reports whether err only means the store is stopping (its context was cancelled):
+// the operation just ends, with nothing to show the user.
+func (s *Store) cancelled(err error) bool {
+	return err != nil && (errors.Is(err, context.Canceled) || s.ctx.Err() != nil)
 }

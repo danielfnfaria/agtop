@@ -17,13 +17,13 @@ var bareKey = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 // like Claude Code config directories (valid, no error), other than current (compared by
 // realpath), in alphabetical order.
 func FindSiblingProfiles(homedir, current string, fsys FS) []ProfileDir {
-	real := func(p string) string {
+	realOf := func(p string) string {
 		if r, err := fsys.Realpath(p); err == nil {
 			return r
 		}
 		return p
 	}
-	currentReal := real(current)
+	currentReal := realOf(current)
 	names := fsys.ListDir(homedir)
 	sort.Strings(names)
 	var found []ProfileDir
@@ -32,7 +32,7 @@ func FindSiblingProfiles(homedir, current string, fsys FS) []ProfileDir {
 			continue
 		}
 		dir := filepath.Join(homedir, name)
-		if !fsys.IsDirectory(dir) || ValidateClaudeDir(dir, fsys).Error != "" || real(dir) == currentReal {
+		if !fsys.IsDirectory(dir) || ValidateClaudeDir(dir, fsys).Error != "" || realOf(dir) == currentReal {
 			continue
 		}
 		found = append(found, ProfileDir{Label: DefaultLabel(dir), Dir: dir, Source: SourceConfig})
@@ -131,7 +131,9 @@ func quote(s string) string {
 type InitResult int
 
 const (
+	// Created means the file did not exist and was written.
 	Created InitResult = iota
+	// Exists means the file was already there and was left untouched.
 	Exists
 )
 

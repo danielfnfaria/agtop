@@ -54,11 +54,11 @@ func loadResume(t *testing.T, order string, upTo float64, strip func(domain.Tran
 	sub := eventsUpTo(t, "subagent-resume", cut, keepEvent)
 	s := NewSessionState("sess-0002")
 	if order == "session-first" {
-		s = ReduceSessionEvents(s, main)
-		return ReduceSessionAgentEvents(s, resumedAgentID, sub)
+		s = SessionEvents(s, main)
+		return SessionAgentEvents(s, resumedAgentID, sub)
 	}
-	s = ReduceSessionAgentEvents(s, resumedAgentID, sub)
-	return ReduceSessionEvents(s, main)
+	s = SessionAgentEvents(s, resumedAgentID, sub)
+	return SessionEvents(s, main)
 }
 
 func TestAgentResumedAfterFinishing(t *testing.T) {
@@ -123,7 +123,7 @@ func TestAgentResumedAfterFinishing(t *testing.T) {
 
 	t.Run("a resume older than the agent end (agent transcript read first) changes nothing", func(t *testing.T) {
 		s := loadResume(t, "agent-first", all, keepEvent)
-		late := ReduceSession(s, domain.ToolResultEvent{EventBase: at(resumeAt(41)), ToolUseID: "toolu_old", ResumedAgentID: resumedAgentID})
+		late := Session(s, domain.ToolResultEvent{EventBase: at(resumeAt(41)), ToolUseID: "toolu_old", ResumedAgentID: resumedAgentID})
 		expectEqual(t, agentOf(t, late, resumedAgentID).Status, domain.StatusCompleted)
 	})
 }
@@ -145,19 +145,19 @@ func TestReopenRules(t *testing.T) {
 		completed := NewAgentState()
 		completed.Status = domain.StatusCompleted
 		completed.FinishedAt = 20
-		expectEqual(t, ReduceAgent(completed, domain.UserPromptEvent{EventBase: at(15), IsMeta: true}).Status, domain.StatusCompleted)
-		reopened := ReduceAgent(completed, domain.UserPromptEvent{EventBase: at(25), IsMeta: true})
+		expectEqual(t, Agent(completed, domain.UserPromptEvent{EventBase: at(15), IsMeta: true}).Status, domain.StatusCompleted)
+		reopened := Agent(completed, domain.UserPromptEvent{EventBase: at(25), IsMeta: true})
 		expectEqual(t, reopened.Status, domain.StatusRunning)
 		expectEqual(t, reopened.FinishedAt, 0)
 	})
 	t.Run("failed only reopens through the explicit resume signal", func(t *testing.T) {
-		s := ReduceSessionEvents(NewSessionState("s"), events{
+		s := SessionEvents(NewSessionState("s"), events{
 			launchResult("t1", "a1", 0),
 			domain.TaskNotificationEvent{EventBase: at(10), TaskID: "a1", Status: "failed"},
 		})
-		s = ReduceSessionAgentEvents(s, "a1", events{domain.UserPromptEvent{EventBase: at(11)}})
+		s = SessionAgentEvents(s, "a1", events{domain.UserPromptEvent{EventBase: at(11)}})
 		expectEqual(t, agentOf(t, s, "a1").Status, domain.StatusFailed)
-		s = ReduceSession(s, domain.ToolResultEvent{EventBase: at(12), ToolUseID: "t2", ResumedAgentID: "a1"})
+		s = Session(s, domain.ToolResultEvent{EventBase: at(12), ToolUseID: "t2", ResumedAgentID: "a1"})
 		expectEqual(t, agentOf(t, s, "a1").Status, domain.StatusRunning)
 		expectEqual(t, agentOf(t, s, "a1").FailureReason, "")
 	})
@@ -194,15 +194,15 @@ func TestAgentsKilledBothReadOrders(t *testing.T) {
 			s := NewSessionState("s")
 			agents := func() {
 				for _, sub := range subs {
-					s = ReduceSessionAgentEvents(s, sub.id, sub.events)
+					s = SessionAgentEvents(s, sub.id, sub.events)
 				}
 			}
 			if order == "session-first" {
-				s = ReduceSessionEvents(s, main)
+				s = SessionEvents(s, main)
 				agents()
 			} else {
 				agents()
-				s = ReduceSessionEvents(s, main)
+				s = SessionEvents(s, main)
 			}
 			expectEqual(t, agentOf(t, s, "a-old").Status, domain.StatusHandedBack)
 			expectEqual(t, agentOf(t, s, "a-new").Status, domain.StatusRunning)

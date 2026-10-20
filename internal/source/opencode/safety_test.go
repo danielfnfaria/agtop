@@ -2,6 +2,7 @@ package opencode_test
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"os"
 	"strings"
@@ -108,7 +109,7 @@ func TestConcurrentWriter(t *testing.T) {
 
 	src := newSource(t, f)
 	discoverOne(t, src, f)
-	r, err := src.OpenTranscript("opencode:" + sid)
+	r, err := src.OpenTranscript(context.Background(), "opencode:"+sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +129,7 @@ func TestConcurrentWriter(t *testing.T) {
 	seen := 0
 	deadline := time.Now().Add(10 * time.Second)
 	for seen < n && time.Now().Before(deadline) {
-		res, err := r.Read()
+		res, err := r.Read(context.Background())
 		if err != nil {
 			t.Fatalf("read while writing: %v", err)
 		}

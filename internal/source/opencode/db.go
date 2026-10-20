@@ -1,6 +1,7 @@
 package opencode
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"net/url"
@@ -43,8 +44,7 @@ func codedErr(code string, err error) error { return &Error{Code: code, Err: err
 
 // ErrorCode is the code of an Error in err's chain, "" for other errors.
 func ErrorCode(err error) string {
-	var e *Error
-	if errors.As(err, &e) {
+	if e, ok := errors.AsType[*Error](err); ok {
 		return e.Code
 	}
 	return ""
@@ -79,7 +79,7 @@ func newProfileDB(profile config.ProfileDir) *profileDB {
 // the handle is dropped (a missing file is not cached: the next call tries again, opencode may
 // create it later); replaced (deleted and recreated, or renamed over), the handle, which would
 // keep reading the old inode, is reopened on the new file.
-func (p *profileDB) conn() (*sql.DB, error) {
+func (p *profileDB) conn(ctx context.Context) (*sql.DB, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.closed {
@@ -106,7 +106,7 @@ func (p *profileDB) conn() (*sql.DB, error) {
 		p.checked = false
 	}
 	if !p.checked {
-		if err := checkSchema(p.db); err != nil {
+		if err := checkSchema(ctx, p.db); err != nil {
 			if ErrorCode(err) != CodeSchema {
 				// Not reachable right now (locked, gone, not a database): forget the handle so a
 				// later call starts over; a schema mismatch is kept and reported on every use.

@@ -1,6 +1,7 @@
 package opencode
 
 import (
+	"context"
 	"database/sql"
 	"os"
 	"path/filepath"
@@ -39,7 +40,7 @@ func TestConnectionIsReadOnly(t *testing.T) {
 	_ = w.Close()
 
 	p := newProfileDB(config.ProfileDir{Label: "oc", Dir: dir})
-	db, err := p.conn()
+	db, err := p.conn(context.Background())
 	if err != nil {
 		t.Fatalf("conn: %v", err)
 	}
@@ -67,12 +68,12 @@ func TestConnectionIsReadOnly(t *testing.T) {
 	if err := db.QueryRow(`SELECT COUNT(*) FROM session`).Scan(&n); err != nil || n != 1 {
 		t.Errorf("rows = %d, %v", n, err)
 	}
-	row, found, err := selectSession(db, "s1")
+	row, found, err := selectSession(t.Context(), db, "s1")
 	if err != nil || !found || row.Directory != "/d" {
 		t.Errorf("selectSession = %+v %v %v", row, found, err)
 	}
 	p.close()
-	if _, err := p.conn(); ErrorCode(err) != CodeClosed {
+	if _, err := p.conn(context.Background()); ErrorCode(err) != CodeClosed {
 		t.Errorf("after close: %v", err)
 	}
 }

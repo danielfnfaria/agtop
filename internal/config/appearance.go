@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -18,7 +19,7 @@ func oneOf(v any, allowed []string, key, file string) (string, error) {
 	if !ok {
 		return "", errorf("%s: %s must be a string", file, key)
 	}
-	if !contains(allowed, s) {
+	if !slices.Contains(allowed, s) {
 		return "", errorf("%s: %s = \"%s\" is not valid (expected %s)", file, key, s, strings.Join(allowed, " | "))
 	}
 	return s, nil
@@ -114,7 +115,7 @@ func parseTheme(t map[string]any, order keyOrder, file string) (*style.ThemeConf
 				}
 				out.Profiles = append(out.Profiles, col)
 			}
-		case contains(style.ThemeRoles, key):
+		case slices.Contains(style.ThemeRoles, key):
 			c, err := color(value, where, file)
 			if err != nil {
 				return nil, err
@@ -155,7 +156,7 @@ func parseGlyphs(g map[string]any, order keyOrder, file string) (*style.GlyphsCo
 				}
 				out.Spinner = append(out.Spinner, s)
 			}
-		case contains(style.GlyphSlots, key):
+		case slices.Contains(style.GlyphSlots, key):
 			s, err := glyph(value, style.SlotWidth, where, file)
 			if err != nil {
 				return nil, err

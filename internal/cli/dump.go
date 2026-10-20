@@ -20,6 +20,7 @@ type DumpSummary struct {
 	ErrorCount int           `json:"errorCount"`
 }
 
+// DumpProfile is the per-profile discovery summary in the dump output.
 type DumpProfile struct {
 	Label              string                        `json:"label"`
 	LiveCount          int                           `json:"liveCount"`
@@ -28,11 +29,13 @@ type DumpProfile struct {
 	Issues             map[discovery.IssueReason]int `json:"issues"`
 }
 
+// DumpTotals is the aggregate counts across all sessions in the dump output.
 type DumpTotals struct {
 	Sessions       int                        `json:"sessions"`
 	AgentsByStatus map[domain.AgentStatus]int `json:"agentsByStatus"`
 }
 
+// DumpSession is one session as printed in the dump output.
 type DumpSession struct {
 	Profile        string               `json:"profile"`
 	Liveness       store.Liveness       `json:"liveness"`
@@ -48,6 +51,7 @@ type DumpSession struct {
 	ParseErrors    int                  `json:"parseErrors"`
 }
 
+// DumpAgents counts a session's agents, in total and by status.
 type DumpAgents struct {
 	Total    int                        `json:"total"`
 	ByStatus map[domain.AgentStatus]int `json:"byStatus"`

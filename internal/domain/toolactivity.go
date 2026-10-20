@@ -9,6 +9,7 @@ import (
 // CommandCategory is the category of a shell command (the only thing kept about it).
 type CommandCategory string
 
+// Known CommandCategory values.
 const (
 	CmdTests   CommandCategory = "tests"
 	CmdBuild   CommandCategory = "build"
@@ -17,8 +18,10 @@ const (
 	CmdOther   CommandCategory = "other"
 )
 
+// ActivityKind is what an agent is doing, shown as its activity label.
 type ActivityKind string
 
+// Known ActivityKind values.
 const (
 	KindWriting    ActivityKind = "writing"
 	KindReading    ActivityKind = "reading"

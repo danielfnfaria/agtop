@@ -2,6 +2,7 @@ package opencode
 
 import (
 	"cmp"
+	"context"
 	"database/sql"
 	"slices"
 
@@ -81,12 +82,12 @@ type item struct {
 	events  []domain.TranscriptEvent
 }
 
-func (r *reader) Read() (source.TranscriptRead, error) {
-	conn, err := r.db.conn()
+func (r *reader) Read(ctx context.Context) (source.TranscriptRead, error) {
+	conn, err := r.db.conn(ctx)
 	if err != nil {
 		return source.TranscriptRead{}, err
 	}
-	session, found, err := selectSession(conn, r.sessionID)
+	session, found, err := selectSession(ctx, conn, r.sessionID)
 	if err != nil {
 		return source.TranscriptRead{}, err
 	}
@@ -99,12 +100,12 @@ func (r *reader) Read() (source.TranscriptRead, error) {
 	out.Events = append(out.Events, r.headEvents(session)...)
 
 	var items []item
-	msgs, err := r.readMessages(conn)
+	msgs, err := r.readMessages(ctx, conn)
 	if err != nil {
 		return source.TranscriptRead{}, err
 	}
 	items = append(items, msgs...)
-	parts, err := r.readParts(conn)
+	parts, err := r.readParts(ctx, conn)
 	if err != nil {
 		return source.TranscriptRead{}, err
 	}
@@ -160,11 +161,11 @@ func (r *reader) headEvents(s sessionRow) []domain.TranscriptEvent {
 	return append(out, ev)
 }
 
-func (r *reader) readMessages(conn *sql.DB) ([]item, error) {
+func (r *reader) readMessages(ctx context.Context, conn *sql.DB) ([]item, error) {
 	var out []item
 	since, afterID := r.messages.since(), ""
-	for page := 0; page < maxPages; page++ {
-		rows, err := selectMessages(conn, r.sessionID, since, afterID)
+	for range maxPages {
+		rows, err := selectMessages(ctx, conn, r.sessionID, since, afterID)
 		if err != nil {
 			return nil, err
 		}
@@ -185,11 +186,11 @@ func (r *reader) readMessages(conn *sql.DB) ([]item, error) {
 	return out, nil
 }
 
-func (r *reader) readParts(conn *sql.DB) ([]item, error) {
+func (r *reader) readParts(ctx context.Context, conn *sql.DB) ([]item, error) {
 	var out []item
 	since, afterID := r.parts.since(), ""
-	for page := 0; page < maxPages; page++ {
-		rows, err := selectToolParts(conn, r.sessionID, since, afterID)
+	for range maxPages {
+		rows, err := selectToolParts(ctx, conn, r.sessionID, since, afterID)
 		if err != nil {
 			return nil, err
 		}

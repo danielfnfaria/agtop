@@ -6,6 +6,7 @@ import (
 	"strconv"
 )
 
+// Standard and extended context window sizes, in tokens.
 const (
 	DefaultContextWindow  = 200_000
 	ExtendedContextWindow = 1_000_000
@@ -22,6 +23,7 @@ type LearnedContextWindows map[string]int
 // promoted to 1M. The UI marks default and inferred with ~.
 type ContextWindowSource string
 
+// Known ContextWindowSource values.
 const (
 	SourceReported ContextWindowSource = "reported"
 	SourceModel    ContextWindowSource = "model"
@@ -38,6 +40,7 @@ type ReportedWindows struct {
 	Model   int
 }
 
+// ContextWindow is a window size and where it came from.
 type ContextWindow struct {
 	Size   int                 `json:"size"`
 	Source ContextWindowSource `json:"source"`

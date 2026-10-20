@@ -187,13 +187,13 @@ func ParseSaved(value any) (Saved, bool) {
 type Action int
 
 const (
-	// ActionNone: nothing to do (remove: not hooked).
+	// ActionNone means there is nothing to do (remove: not hooked).
 	ActionNone Action = iota
-	// ActionAlready: setup is already in place.
+	// ActionAlready means setup is already in place.
 	ActionAlready
-	// ActionSkip: the profile cannot be changed; see Reason.
+	// ActionSkip means the profile cannot be changed; see Reason.
 	ActionSkip
-	// ActionApply: settings changes.
+	// ActionApply means the settings need changes.
 	ActionApply
 )
 
@@ -280,8 +280,14 @@ func PlanRemove(settings *Object, saved *Saved) Plan {
 	if !IsHooked(current) {
 		return Plan{Action: ActionNone}
 	}
-	cur := current.(*Object)
-	command := cur.vals["command"].(string)
+	cur, ok := current.(*Object)
+	if !ok {
+		return Plan{Action: ActionSkip, Reason: reasonUnknownForm}
+	}
+	command, ok := cur.vals["command"].(string)
+	if !ok {
+		return Plan{Action: ActionSkip, Reason: reasonUnknownForm}
+	}
 	var restored Unwrapped
 	if saved != nil && saved.Command == command {
 		if orig, ok := savedOriginalCommand(saved); ok {

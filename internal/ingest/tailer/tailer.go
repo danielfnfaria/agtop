@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"slices"
 	"sync"
 	"syscall"
 	"unicode/utf8"
@@ -50,6 +51,7 @@ type OSFS struct{}
 
 var _ FS = OSFS{}
 
+// Stat returns the size and file identity (inode and device) of path.
 func (OSFS) Stat(path string) (Stat, error) {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -62,6 +64,7 @@ func (OSFS) Stat(path string) (Stat, error) {
 	return Stat{Size: info.Size(), Ino: uint64(st.Ino), Dev: uint64(st.Dev)}, nil // the field types differ per OS
 }
 
+// Open opens path for reading.
 func (OSFS) Open(path string) (File, error) { return os.Open(path) }
 
 // ErrInvalidOption is returned by New for a chunk size or line limit that is not positive.
@@ -260,7 +263,7 @@ func (t *Tailer) consume(chunk []byte, out *Result) {
 
 		line := seg
 		if len(t.partial) > 0 {
-			line = append(t.partial, seg...)
+			line = slices.Concat(t.partial, seg)
 			t.partial = nil
 		}
 		line = bytes.TrimSuffix(line, []byte{'\r'})

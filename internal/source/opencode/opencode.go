@@ -16,6 +16,7 @@ package opencode
 
 import (
 	"cmp"
+	"context"
 	"database/sql"
 	"errors"
 	"maps"
@@ -38,7 +39,7 @@ import (
 const (
 	// ProcessName is the executable (and process name) of the opencode TUI.
 	ProcessName = "opencode"
-	// CodeProcesses: the processes could not be listed.
+	// CodeProcesses is the error code for when the processes could not be listed.
 	CodeProcesses = "PROC_LIST"
 	// updatedLagMs is how far session.time_updated may trail the real last touch (messages and
 	// parts): candidates are read in time_updated order and the exact touch is only computed
@@ -114,6 +115,7 @@ func New(opts Options) *Source {
 
 var _ source.Source = (*Source)(nil)
 
+// Provider returns domain.Opencode.
 func (*Source) Provider() domain.ProviderID { return domain.Opencode }
 
 // Close closes every connection; the source is unusable afterwards.
@@ -163,7 +165,7 @@ func (s *Source) dbOf(sessionID string) (*profileDB, bool) {
 // processes. Without a process nothing is live and the database is not queried. A profile whose
 // database cannot be read gets an issue (file opencode.db) and no sessions; the first such
 // failure is also returned with the (partial) result.
-func (s *Source) Discover(profiles []config.ProfileDir) (discovery.Result, error) {
+func (s *Source) Discover(ctx context.Context, profiles []config.ProfileDir) (discovery.Result, error) {
 	now := s.now()
 	result := discovery.Result{ScannedAt: now}
 	procs, err := s.listProcesses()
@@ -182,7 +184,7 @@ func (s *Source) Discover(profiles []config.ProfileDir) (discovery.Result, error
 		pd := discovery.ProfileDiscovery{Profile: profile}
 		var roots []discovery.DiscoveredSession
 		if len(byCwd) > 0 {
-			roots, err = s.discoverProfile(profile, byCwd, claimed)
+			roots, err = s.discoverProfile(ctx, profile, byCwd, claimed)
 		}
 		if err != nil {
 			pd.Diagnostics.Issues = []discovery.RegistryIssue{{File: config.OpencodeDBName, Reason: discovery.IssueDatabase}}
@@ -218,8 +220,8 @@ func processesByCwd(procs []proc.Process) map[string][]proc.Process {
 // resolved when it exists.
 func resolveDir(dir string) string {
 	dir = filepath.Clean(dir)
-	if real, err := filepath.EvalSymlinks(dir); err == nil {
-		return real
+	if realPath, err := filepath.EvalSymlinks(dir); err == nil {
+		return realPath
 	}
 	return dir
 }
@@ -240,16 +242,16 @@ func startMillis(p proc.Process) int64 {
 // discoverProfile is the live sessions of a profile: one per running process not claimed yet,
 // the most recently touched root session of the process cwd that was touched since the process
 // started.
-func (s *Source) discoverProfile(profile config.ProfileDir, byCwd map[string][]proc.Process, claimed map[int]bool) ([]discovery.DiscoveredSession, error) {
+func (s *Source) discoverProfile(ctx context.Context, profile config.ProfileDir, byCwd map[string][]proc.Process, claimed map[int]bool) ([]discovery.DiscoveredSession, error) {
 	db, err := s.dbFor(profile)
 	if err != nil {
 		return nil, err
 	}
-	conn, err := db.conn()
+	conn, err := db.conn(ctx)
 	if err != nil {
 		return nil, err
 	}
-	roots, err := selectRoots(conn)
+	roots, err := selectRoots(ctx, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -280,7 +282,7 @@ func (s *Source) discoverProfile(profile config.ProfileDir, byCwd map[string][]p
 		if len(procs) == 0 {
 			continue
 		}
-		sessions, err := s.candidates(conn, byDir[dir], procs)
+		sessions, err := s.candidates(ctx, conn, byDir[dir], procs)
 		if err != nil {
 			return nil, err
 		}
@@ -311,7 +313,7 @@ func (s *Source) discoverProfile(profile config.ProfileDir, byCwd map[string][]p
 // stops being worth a query once its Updated is more than the lag behind the oldest process
 // start, or, with enough candidates found already, behind the touch of the last one that ranks
 // (session.time_updated trails the real touch by at most updatedLagMs).
-func (s *Source) candidates(conn *sql.DB, roots []rootRow, procs []proc.Process) ([]candidate, error) {
+func (s *Source) candidates(ctx context.Context, conn *sql.DB, roots []rootRow, procs []proc.Process) ([]candidate, error) {
 	oldest := startMillis(procs[0])
 	for _, p := range procs[1:] {
 		oldest = min(oldest, startMillis(p))
@@ -324,7 +326,7 @@ func (s *Source) candidates(conn *sql.DB, roots []rootRow, procs []proc.Process)
 		if len(out) >= len(procs) && r.Updated < out[len(procs)-1].LastActivity-updatedLagMs {
 			break
 		}
-		activity, err := selectActivity(conn, r)
+		activity, err := selectActivity(ctx, conn, r)
 		if err != nil {
 			return nil, err
 		}
@@ -386,14 +388,14 @@ func parseRef(ref string) (sessionID, suffix string, ok bool) {
 
 // RegistryWatch watches the database and its write-ahead log in the profile directory.
 func (s *Source) RegistryWatch(profile config.ProfileDir) (watcher.Target, bool) {
-	real, err := filepath.EvalSymlinks(profile.Dir)
+	realPath, err := filepath.EvalSymlinks(profile.Dir)
 	if err != nil {
 		return watcher.Target{}, false
 	}
-	return watcher.FilesTarget(real, config.OpencodeDBName, WALName), true
+	return watcher.FilesTarget(realPath, config.OpencodeDBName, WALName), true
 }
 
-// SessionWatch: the database watch of the profile already covers every session.
+// SessionWatch reports no watch: the database watch of the profile already covers every session.
 func (*Source) SessionWatch(string, string) (watcher.Target, bool) { return watcher.Target{}, false }
 
 // ForgetSession drops a session and its children from the reference map.
@@ -409,7 +411,7 @@ func (s *Source) ForgetSession(_ config.ProfileDir, sessionID string) {
 }
 
 // OpenTranscript opens the reader of "opencode:<sessionID>".
-func (s *Source) OpenTranscript(ref string) (source.TranscriptReader, error) {
+func (s *Source) OpenTranscript(_ context.Context, ref string) (source.TranscriptReader, error) {
 	id, suffix, ok := parseRef(ref)
 	if !ok || suffix != "" {
 		return nil, codedErr(CodeRef, nil)
@@ -422,7 +424,7 @@ func (s *Source) OpenTranscript(ref string) (source.TranscriptReader, error) {
 }
 
 // ListAgents lists the child sessions of "opencode:<sessionID>/agents".
-func (s *Source) ListAgents(agentsDir string, _ map[string]string) []discovery.SubagentFiles {
+func (s *Source) ListAgents(ctx context.Context, agentsDir string, _ map[string]string) []discovery.SubagentFiles {
 	id, suffix, ok := parseRef(agentsDir)
 	if !ok || suffix != agentsSuffix {
 		return nil
@@ -431,11 +433,11 @@ func (s *Source) ListAgents(agentsDir string, _ map[string]string) []discovery.S
 	if !ok {
 		return nil
 	}
-	conn, err := db.conn()
+	conn, err := db.conn(ctx)
 	if err != nil {
 		return nil
 	}
-	children, err := selectChildren(conn, id)
+	children, err := selectChildren(ctx, conn, id)
 	if err != nil {
 		return nil
 	}
@@ -457,7 +459,7 @@ func (s *Source) ListAgents(agentsDir string, _ map[string]string) []discovery.S
 // ReadAgentMeta reads "opencode:<sessionID>/meta": the agent type, the description (the title
 // without its " (@type subagent)" suffix) and the model of a child session.
 func (s *Source) ReadAgentMeta(file string) discovery.AgentMetaResult {
-	row, err := s.sessionOf(file, metaSuffix)
+	row, err := s.sessionOf(context.Background(), file, metaSuffix)
 	if err != nil {
 		return discovery.AgentMetaResult{Code: codeOf(err)}
 	}
@@ -470,7 +472,7 @@ func (s *Source) ReadAgentMeta(file string) discovery.AgentMetaResult {
 
 // FileSignature of "opencode:<sessionID>/meta" is the time_updated of the session.
 func (s *Source) FileSignature(file string) (string, bool) {
-	row, err := s.sessionOf(file, metaSuffix)
+	row, err := s.sessionOf(context.Background(), file, metaSuffix)
 	if err != nil {
 		return "", false
 	}
@@ -478,7 +480,7 @@ func (s *Source) FileSignature(file string) (string, bool) {
 }
 
 // sessionOf reads the session row of a reference with the given suffix.
-func (s *Source) sessionOf(ref, suffix string) (sessionRow, error) {
+func (s *Source) sessionOf(ctx context.Context, ref, suffix string) (sessionRow, error) {
 	id, got, ok := parseRef(ref)
 	if !ok || got != suffix {
 		return sessionRow{}, codedErr(CodeRef, nil)
@@ -487,11 +489,11 @@ func (s *Source) sessionOf(ref, suffix string) (sessionRow, error) {
 	if !ok {
 		return sessionRow{}, codedErr(CodeRef, nil)
 	}
-	conn, err := db.conn()
+	conn, err := db.conn(ctx)
 	if err != nil {
 		return sessionRow{}, err
 	}
-	row, found, err := selectSession(conn, id)
+	row, found, err := selectSession(ctx, conn, id)
 	if err != nil {
 		return sessionRow{}, err
 	}

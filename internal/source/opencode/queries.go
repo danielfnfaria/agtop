@@ -1,6 +1,7 @@
 package opencode
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -31,9 +32,9 @@ const (
 	commandClip = 4000
 )
 
-func checkSchema(db *sql.DB) error {
+func checkSchema(ctx context.Context, db *sql.DB) error {
 	for table, columns := range requiredColumns {
-		rows, err := db.Query(`SELECT name FROM pragma_table_info(?)`, table)
+		rows, err := db.QueryContext(ctx, `SELECT name FROM pragma_table_info(?)`, table)
 		if err != nil {
 			return codedErr(CodeQuery, err)
 		}
@@ -83,12 +84,12 @@ SELECT s.id, s.directory, s.title, s.version, s.time_created, s.time_updated, js
 FROM session s
 WHERE s.parent_id IS NULL AND s.time_archived IS NULL
 ORDER BY updated DESC
-LIMIT ` + itoa(maxRoots)
+LIMIT ` + strconv.Itoa(maxRoots)
 
 // selectRoots lists the most recently updated root sessions (cheap: the session table alone),
 // newest Updated first.
-func selectRoots(db *sql.DB) ([]rootRow, error) {
-	rows, err := db.Query(queryRoots)
+func selectRoots(ctx context.Context, db *sql.DB) ([]rootRow, error) {
+	rows, err := db.QueryContext(ctx, queryRoots)
 	if err != nil {
 		return nil, codedErr(CodeQuery, err)
 	}
@@ -131,10 +132,10 @@ SELECT
     AND json_extract(data, '$.type') = 'tool' AND json_extract(data, '$.state.status') IN ('pending', 'running'))`
 
 // selectActivity reads the activity of one session (whose row is given, for its own time).
-func selectActivity(db *sql.DB, s rootRow) (activityRow, error) {
+func selectActivity(ctx context.Context, db *sql.DB, s rootRow) (activityRow, error) {
 	var msgAt, partAt, childAt sql.NullInt64
 	var openMsg, openTool bool
-	if err := db.QueryRow(queryActivity, s.ID).Scan(&msgAt, &partAt, &childAt, &openMsg, &openTool); err != nil {
+	if err := db.QueryRowContext(ctx, queryActivity, s.ID).Scan(&msgAt, &partAt, &childAt, &openMsg, &openTool); err != nil {
 		return activityRow{}, codedErr(CodeQuery, err)
 	}
 	return activityRow{
@@ -163,10 +164,10 @@ SELECT id, parent_id, directory, title, version, agent, json_extract(model, '$.i
 FROM session WHERE id = ?1 LIMIT 1`
 
 // selectSession reads one session; found is false when there is no such row.
-func selectSession(db *sql.DB, id string) (row sessionRow, found bool, err error) {
+func selectSession(ctx context.Context, db *sql.DB, id string) (row sessionRow, found bool, err error) {
 	var parent, directory, title, version, agent, model, provider sql.NullString
 	var created, updated sql.NullInt64
-	err = db.QueryRow(querySession, id).Scan(&row.ID, &parent, &directory, &title, &version, &agent, &model, &provider, &created, &updated)
+	err = db.QueryRowContext(ctx, querySession, id).Scan(&row.ID, &parent, &directory, &title, &version, &agent, &model, &provider, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return sessionRow{}, false, nil
 	}
@@ -180,7 +181,7 @@ func selectSession(db *sql.DB, id string) (row sessionRow, found bool, err error
 }
 
 var queryChildren = `
-SELECT id, time_updated FROM session WHERE parent_id = ?1 ORDER BY time_created, id LIMIT ` + itoa(maxChildren)
+SELECT id, time_updated FROM session WHERE parent_id = ?1 ORDER BY time_created, id LIMIT ` + strconv.Itoa(maxChildren)
 
 // childRef is a child session: its id and change signature.
 type childRef struct {
@@ -188,8 +189,8 @@ type childRef struct {
 	TimeUpdated int64
 }
 
-func selectChildren(db *sql.DB, parentID string) ([]childRef, error) {
-	rows, err := db.Query(queryChildren, parentID)
+func selectChildren(ctx context.Context, db *sql.DB, parentID string) ([]childRef, error) {
+	rows, err := db.QueryContext(ctx, queryChildren, parentID)
 	if err != nil {
 		return nil, codedErr(CodeQuery, err)
 	}
@@ -239,12 +240,12 @@ SELECT id, time_created, time_updated,
 FROM message
 WHERE session_id = ?1 AND (time_updated > ?2 OR (time_updated = ?2 AND id > ?3))
 ORDER BY time_updated, id
-LIMIT ` + itoa(pageSize)
+LIMIT ` + strconv.Itoa(pageSize)
 
 // selectMessages is one page of the messages of a session after the cursor (time_updated, id):
 // rows with the cursor time are taken when their id is above afterID ("" takes them all).
-func selectMessages(db *sql.DB, sessionID string, since int64, afterID string) ([]messageRow, error) {
-	rows, err := db.Query(queryMessages, sessionID, since, afterID)
+func selectMessages(ctx context.Context, db *sql.DB, sessionID string, since int64, afterID string) ([]messageRow, error) {
+	rows, err := db.QueryContext(ctx, queryMessages, sessionID, since, afterID)
 	if err != nil {
 		return nil, codedErr(CodeQuery, err)
 	}
@@ -294,7 +295,7 @@ var queryToolParts = `
 SELECT id, message_id, time_created, time_updated,
   json_extract(data, '$.tool'), json_extract(data, '$.callID'), json_extract(data, '$.state.status'),
   json_extract(data, '$.state.input.filePath'), json_extract(data, '$.state.input.path'),
-  substr(json_extract(data, '$.state.input.command'), 1, ` + itoa(commandClip) + `),
+  substr(json_extract(data, '$.state.input.command'), 1, ` + strconv.Itoa(commandClip) + `),
   json_extract(data, '$.state.input.description'), json_extract(data, '$.state.input.subagent_type'),
   json_extract(data, '$.state.metadata.sessionId'),
   json_extract(data, '$.state.time.start'), json_extract(data, '$.state.time.end')
@@ -302,12 +303,12 @@ FROM part
 WHERE session_id = ?1 AND (time_updated > ?2 OR (time_updated = ?2 AND id > ?3))
   AND json_extract(data, '$.type') = 'tool'
 ORDER BY time_updated, id
-LIMIT ` + itoa(pageSize)
+LIMIT ` + strconv.Itoa(pageSize)
 
 // selectToolParts is one page of the tool parts of a session after the cursor (see
 // selectMessages).
-func selectToolParts(db *sql.DB, sessionID string, since int64, afterID string) ([]partRow, error) {
-	rows, err := db.Query(queryToolParts, sessionID, since, afterID)
+func selectToolParts(ctx context.Context, db *sql.DB, sessionID string, since int64, afterID string) ([]partRow, error) {
+	rows, err := db.QueryContext(ctx, queryToolParts, sessionID, since, afterID)
 	if err != nil {
 		return nil, codedErr(CodeQuery, err)
 	}
@@ -333,5 +334,3 @@ func selectToolParts(db *sql.DB, sessionID string, since int64, afterID string) 
 	}
 	return out, nil
 }
-
-func itoa(n int) string { return strconv.Itoa(n) }
