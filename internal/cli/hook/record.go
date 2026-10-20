@@ -34,10 +34,10 @@ func writeAtomic(dir, name string, content []byte) (err error) {
 	return os.Rename(tmp, filepath.Join(dir, name))
 }
 
-// readSmall reads a regular file of at most max bytes; anything wrong means "none".
-func readSmall(file string, max int64) ([]byte, bool) {
+// readSmall reads a regular file of at most limit bytes; anything wrong means "none".
+func readSmall(file string, limit int64) ([]byte, bool) {
 	st, err := os.Stat(file)
-	if err != nil || !st.Mode().IsRegular() || st.Size() > max {
+	if err != nil || !st.Mode().IsRegular() || st.Size() > limit {
 		return nil, false
 	}
 	data, err := os.ReadFile(file)

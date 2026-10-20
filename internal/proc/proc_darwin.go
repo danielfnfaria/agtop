@@ -34,10 +34,8 @@ func Lookup(pid int) (Info, error) {
 
 // cString is a NUL-terminated fixed array as a string.
 func cString(b []byte) string {
-	if i := bytes.IndexByte(b, 0); i >= 0 {
-		return string(b[:i])
-	}
-	return string(b)
+	before, _, _ := bytes.Cut(b, []byte{0})
+	return string(before)
 }
 
 // parseProcArgs2 parses a kern.procargs2 buffer: an int32 argc, then the executable path

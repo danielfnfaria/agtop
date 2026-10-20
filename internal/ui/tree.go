@@ -44,7 +44,7 @@ func treeSpinning(tm treeModel, vp model.TreeViewport) bool {
 
 // drawTree draws the clusters on the body (rows [y, y+rows)): centered when everything fits,
 // else the window of the viewport with the indicators above and below.
-func (p painter) drawTree(c *canvas, y, rows int, tm treeModel, vp model.TreeViewport, selectedKey string, tones map[string]style.Color) {
+func (p painter) drawTree(c *canvas, y, _ int, tm treeModel, vp model.TreeViewport, selectedKey string, tones map[string]style.Color) {
 	content := newCanvas(c.w, tm.layout.ContentHeight)
 	muted := sty{fg: p.t.Muted}
 	for _, row := range tm.layout.Rows {
@@ -81,7 +81,7 @@ func (p painter) drawCluster(c *canvas, cl model.ClusterLayout, s *store.Session
 	for _, line := range cl.Lines {
 		c.text(x+line.Connector.Left, y+line.Connector.Y, seg{line.Connector.Text, muted})
 		if line.HasTrunk {
-			for r := 0; r < model.AgentHeight; r++ {
+			for r := range model.AgentHeight {
 				c.text(x+line.Trunk, y+line.Y+r, seg{p.g.Line.Vertical, muted})
 			}
 		}

@@ -1,6 +1,7 @@
 package opencode_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -58,7 +59,7 @@ func newSourceListing(t *testing.T, f *fixture, list func() ([]proc.Process, err
 
 func discoverOne(t *testing.T, s *opencode.Source, f *fixture) discovery.ProfileDiscovery {
 	t.Helper()
-	res, err := s.Discover([]config.ProfileDir{f.profile()})
+	res, err := s.Discover(context.Background(), []config.ProfileDir{f.profile()})
 	if err != nil {
 		t.Fatalf("Discover: %v", err)
 	}
@@ -78,7 +79,7 @@ func liveIDs(pd discovery.ProfileDiscovery) map[string]discovery.Activity {
 
 func readAll(t *testing.T, r source.TranscriptReader) source.TranscriptRead {
 	t.Helper()
-	res, err := r.Read()
+	res, err := r.Read(context.Background())
 	if err != nil {
 		t.Fatalf("Read: %v", err)
 	}
@@ -133,7 +134,7 @@ func TestDiscover(t *testing.T) {
 			t.Errorf("record = %+v", d)
 		}
 	}
-	if agents := s.ListAgents("opencode:ses_parent/agents", map[string]string{}); len(agents) != 1 ||
+	if agents := s.ListAgents(context.Background(), "opencode:ses_parent/agents", map[string]string{}); len(agents) != 1 ||
 		agents[0].AgentID != "ses_child" || agents[0].TranscriptPath != "opencode:ses_child" || agents[0].MetaPath != "opencode:ses_child/meta" {
 		t.Errorf("agents = %+v", agents)
 	}
@@ -147,12 +148,12 @@ func TestDiscover(t *testing.T) {
 	if _, ok := s.FileSignature("opencode:nope/meta"); ok {
 		t.Error("unknown session must have no signature")
 	}
-	if _, err := s.OpenTranscript("opencode:nope"); err == nil || opencode.ErrorCode(err) != opencode.CodeRef {
+	if _, err := s.OpenTranscript(context.Background(), "opencode:nope"); err == nil || opencode.ErrorCode(err) != opencode.CodeRef {
 		t.Errorf("unknown ref: %v", err)
 	}
 	// The store forgets a session: its children go with it.
 	s.ForgetSession(f.profile(), "ses_parent")
-	if _, err := s.OpenTranscript("opencode:ses_child"); err == nil {
+	if _, err := s.OpenTranscript(context.Background(), "opencode:ses_child"); err == nil {
 		t.Error("child of a forgotten session must be unknown")
 	}
 }
@@ -170,7 +171,7 @@ func TestDiscoverByProcess(t *testing.T) {
 			t.Errorf("live = %v", got)
 		}
 		dir := t.TempDir()
-		res, err := s.Discover([]config.ProfileDir{{Label: "none", Dir: dir, Provider: domain.Opencode}})
+		res, err := s.Discover(context.Background(), []config.ProfileDir{{Label: "none", Dir: dir, Provider: domain.Opencode}})
 		if err != nil || len(res.Profiles) != 1 || len(res.Profiles[0].Diagnostics.Issues) != 0 {
 			t.Errorf("without database: %v %+v", err, res)
 		}
@@ -270,7 +271,7 @@ func TestDiscoverByProcess(t *testing.T) {
 		s := newSourceWith(t, f, []proc.Process{procAt(800, "/home/u/proj", procStart)})
 		second := f.profile()
 		second.Label = "oc2"
-		res, err := s.Discover([]config.ProfileDir{f.profile(), second})
+		res, err := s.Discover(context.Background(), []config.ProfileDir{f.profile(), second})
 		if err != nil || len(res.Profiles) != 2 || len(res.Profiles[0].Live) != 1 || len(res.Profiles[1].Live) != 0 {
 			t.Errorf("err = %v, live = %d/%d", err, len(res.Profiles[0].Live), len(res.Profiles[1].Live))
 		}
@@ -296,7 +297,7 @@ func TestDiscoverByProcess(t *testing.T) {
 	})
 	t.Run("the process list fails: a coded error, no sessions", func(t *testing.T) {
 		s := newSourceListing(t, f, func() ([]proc.Process, error) { return nil, errors.New("sysctl: boom") })
-		res, err := s.Discover([]config.ProfileDir{f.profile()})
+		res, err := s.Discover(context.Background(), []config.ProfileDir{f.profile()})
 		if opencode.ErrorCode(err) != opencode.CodeProcesses || len(res.Profiles) != 1 || len(res.Profiles[0].Live) != 0 {
 			t.Errorf("err = %v, res = %+v", err, res)
 		}
@@ -309,7 +310,7 @@ func TestDiscoverWithoutDatabase(t *testing.T) {
 		ListProcesses: func() ([]proc.Process, error) { return []proc.Process{procAt(1, "/home/u/proj", procStart)}, nil }})
 	defer func() { _ = s.Close() }()
 	profile := config.ProfileDir{Label: "oc", Dir: dir, Provider: domain.Opencode}
-	res, err := s.Discover([]config.ProfileDir{profile})
+	res, err := s.Discover(context.Background(), []config.ProfileDir{profile})
 	if opencode.ErrorCode(err) != opencode.CodeMissing || err.Error() != "opencode: DB_MISSING" {
 		t.Errorf("err = %v", err)
 	}
@@ -319,7 +320,7 @@ func TestDiscoverWithoutDatabase(t *testing.T) {
 	}
 	// Closed: everything fails with the closed code.
 	_ = s.Close()
-	if _, err := s.Discover([]config.ProfileDir{profile}); opencode.ErrorCode(err) != opencode.CodeClosed {
+	if _, err := s.Discover(context.Background(), []config.ProfileDir{profile}); opencode.ErrorCode(err) != opencode.CodeClosed {
 		t.Errorf("after close: %v", err)
 	}
 }
@@ -370,7 +371,7 @@ func TestReaderEventsAndCursor(t *testing.T) {
 
 	s := newSource(t, f)
 	discoverOne(t, s, f)
-	r, err := s.OpenTranscript("opencode:" + sid)
+	r, err := s.OpenTranscript(context.Background(), "opencode:"+sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -397,7 +398,7 @@ func TestReaderEventsAndCursor(t *testing.T) {
 		use.ToolUses[0].Target != "/home/u/proj/main.go" || use.MessageID != "msg_a1" {
 		t.Errorf("tool use = %+v", use)
 	}
-	state := reduce.ReduceSessionEvents(reduce.NewSessionState(sid), first.Events)
+	state := reduce.SessionEvents(reduce.NewSessionState(sid), first.Events)
 	if len(state.PendingTools) != 1 || state.PendingTools[0].Name != "Edit" || state.Model.ContextWindow != 1_000_000 {
 		t.Errorf("state = %+v", state)
 	}
@@ -419,7 +420,7 @@ func TestReaderEventsAndCursor(t *testing.T) {
 	if done.Usage == nil || *done.Usage != (domain.TokenTotals{Input: 100, Output: 25, CacheRead: 1000, CacheCreate: 50}) || done.StopReason != "stop" {
 		t.Errorf("completed = %+v", done)
 	}
-	state = reduce.ReduceSessionEvents(state, third.Events)
+	state = reduce.SessionEvents(state, third.Events)
 	if len(state.PendingTools) != 0 || state.Totals != (domain.TokenTotals{Input: 100, Output: 25, CacheRead: 1000, CacheCreate: 50}) ||
 		state.Context.Used != 1150 {
 		t.Errorf("state after completion = %+v", state)
@@ -445,7 +446,7 @@ func TestReaderWithoutCatalog(t *testing.T) {
 	f.addSession(sessionSpec{ID: sid, Title: "No catalog", Model: model, Created: now - minute, Updated: now - minute})
 	s := newSource(t, f)
 	discoverOne(t, s, f)
-	r, err := s.OpenTranscript("opencode:" + sid)
+	r, err := s.OpenTranscript(context.Background(), "opencode:"+sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -469,11 +470,11 @@ func TestTaskLifecycle(t *testing.T) {
 
 	s := newSource(t, f)
 	discoverOne(t, s, f)
-	r, err := s.OpenTranscript("opencode:" + parent)
+	r, err := s.OpenTranscript(context.Background(), "opencode:"+parent)
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := reduce.ReduceSessionEvents(reduce.NewSessionState(parent), readAll(t, r).Events)
+	state := reduce.SessionEvents(reduce.NewSessionState(parent), readAll(t, r).Events)
 	agent, ok := state.Agents["call_task"]
 	if !ok || agent.Status != domain.StatusLaunched || agent.Type != "explore" || agent.Description != "Scan the repo" {
 		t.Fatalf("launched = %+v (%v)", agent, ok)
@@ -485,17 +486,17 @@ func TestTaskLifecycle(t *testing.T) {
 		map[string]any{"sessionId": child, "parentSessionId": parent, "model": map[string]any{"providerID": "anthropic", "modelID": model}}, "", now-hour+1, 0))
 	f.addMessage(child, "msg_c1", now-hour+3, now-hour+3, assistantData(child, model, now-hour+3, 0, "", tokens{}))
 	f.addPart(child, "msg_c1", "prt_c1", now-hour+4, now-hour+4, toolData("grep", "call_c1", "running", map[string]any{"pattern": "x", "path": "/home/u/proj"}, nil, "", now-hour+4, 0))
-	state = reduce.ReduceSessionEvents(state, readAll(t, r).Events)
-	agents := s.ListAgents("opencode:"+parent+"/agents", map[string]string{})
+	state = reduce.SessionEvents(state, readAll(t, r).Events)
+	agents := s.ListAgents(context.Background(), "opencode:"+parent+"/agents", map[string]string{})
 	if len(agents) != 1 || agents[0].AgentID != child {
 		t.Fatalf("agents = %+v", agents)
 	}
 	state = reduce.ApplyAgentMeta(state, child, s.ReadAgentMeta(agents[0].MetaPath).Meta)
-	cr, err := s.OpenTranscript(agents[0].TranscriptPath)
+	cr, err := s.OpenTranscript(context.Background(), agents[0].TranscriptPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	state = reduce.ReduceSessionAgentEvents(state, child, readAll(t, cr).Events)
+	state = reduce.SessionAgentEvents(state, child, readAll(t, cr).Events)
 	if len(state.Agents) != 1 {
 		t.Fatalf("agents = %+v", state.Agents)
 	}
@@ -510,8 +511,8 @@ func TestTaskLifecycle(t *testing.T) {
 	f.updateMessage("msg_c1", now-hour+6, assistantData(child, model, now-hour+3, now-hour+6, "stop", tokens{input: 10, output: 2}))
 	f.updatePart("prt_task", now-hour+7, toolData("task", "call_task", "completed", input,
 		map[string]any{"sessionId": child, "parentSessionId": parent}, "result text", now-hour+1, now-hour+7))
-	state = reduce.ReduceSessionAgentEvents(state, child, readAll(t, cr).Events)
-	state = reduce.ReduceSessionEvents(state, readAll(t, r).Events)
+	state = reduce.SessionAgentEvents(state, child, readAll(t, cr).Events)
+	state = reduce.SessionEvents(state, readAll(t, r).Events)
 	agent = state.Agents[child]
 	if agent.Status != domain.StatusCompleted || agent.FinishedAt != now-hour+7 || agent.Totals.Input != 10 || len(agent.PendingTools) != 0 {
 		t.Errorf("completed = %+v", agent)
@@ -521,7 +522,7 @@ func TestTaskLifecycle(t *testing.T) {
 	f.addPart(parent, "msg_a1", "prt_task2", now-minute, now-minute, toolData("task", "call_task2", "error",
 		map[string]any{"description": "Doomed", "prompt": "fail", "subagent_type": "general"},
 		map[string]any{"sessionId": "ses_c2"}, "boom", now-2*minute, now-minute))
-	state = reduce.ReduceSessionEvents(state, readAll(t, r).Events)
+	state = reduce.SessionEvents(state, readAll(t, r).Events)
 	if failed := state.Agents["ses_c2"]; failed.Status != domain.StatusFailed || failed.Description != "Doomed" || failed.Type != "general" {
 		t.Errorf("failed = %+v", failed)
 	}
@@ -543,7 +544,7 @@ func TestReaderToolMapping(t *testing.T) {
 	f.addPart(sid, "msg_1", "prt_step", now-minute+6, now-minute+6, stepFinishData(tokens{input: 1}))
 	s := newSource(t, f)
 	discoverOne(t, s, f)
-	r, err := s.OpenTranscript("opencode:" + sid)
+	r, err := s.OpenTranscript(context.Background(), "opencode:"+sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -587,7 +588,7 @@ func TestSchemaMismatch(t *testing.T) {
 			f.addSession(sessionSpec{ID: "ses_1", Title: "x", Model: model, Created: now, Updated: now})
 			f.exec(tc.ddl)
 			s := newSource(t, f)
-			res, err := s.Discover([]config.ProfileDir{f.profile()})
+			res, err := s.Discover(context.Background(), []config.ProfileDir{f.profile()})
 			if opencode.ErrorCode(err) != opencode.CodeSchema {
 				t.Errorf("err = %v", err)
 			}
@@ -595,7 +596,7 @@ func TestSchemaMismatch(t *testing.T) {
 				t.Errorf("result = %+v", res)
 			}
 			// Reported again, never cached as fine.
-			if _, err := s.Discover([]config.ProfileDir{f.profile()}); opencode.ErrorCode(err) != opencode.CodeSchema {
+			if _, err := s.Discover(context.Background(), []config.ProfileDir{f.profile()}); opencode.ErrorCode(err) != opencode.CodeSchema {
 				t.Errorf("second err = %v", err)
 			}
 		})
@@ -608,7 +609,7 @@ func TestSchemaMismatch(t *testing.T) {
 		s := opencode.New(opencode.Options{Now: func() int64 { return now }, Homedir: dir, Env: config.Env{},
 			ListProcesses: func() ([]proc.Process, error) { return []proc.Process{procAt(1, "/home/u/proj", procStart)}, nil }})
 		defer func() { _ = s.Close() }()
-		_, err := s.Discover([]config.ProfileDir{{Label: "oc", Dir: dir, Provider: domain.Opencode}})
+		_, err := s.Discover(context.Background(), []config.ProfileDir{{Label: "oc", Dir: dir, Provider: domain.Opencode}})
 		if code := opencode.ErrorCode(err); code != opencode.CodeQuery && code != opencode.CodeOpen {
 			t.Errorf("err = %v", err)
 		}
@@ -671,7 +672,7 @@ func TestLateCommitBelowCursor(t *testing.T) {
 	f.addMessage(sid, "msg_1", now-minute, now, userData(now-minute, model))
 	s := newSource(t, f)
 	discoverOne(t, s, f)
-	r, err := s.OpenTranscript("opencode:" + sid)
+	r, err := s.OpenTranscript(context.Background(), "opencode:"+sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -727,7 +728,7 @@ func TestDatabaseReplaced(t *testing.T) {
 	if err := os.Remove(f.path); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Discover([]config.ProfileDir{f.profile()}); opencode.ErrorCode(err) != opencode.CodeMissing {
+	if _, err := s.Discover(context.Background(), []config.ProfileDir{f.profile()}); opencode.ErrorCode(err) != opencode.CodeMissing {
 		t.Errorf("deleted: %v", err)
 	}
 	h := newFixture(t)

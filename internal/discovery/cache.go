@@ -11,8 +11,10 @@ type Cache[V any] struct {
 	m  map[string]V
 }
 
+// NewCache returns an empty Cache.
 func NewCache[V any]() *Cache[V] { return &Cache[V]{m: map[string]V{}} }
 
+// Get returns the value for key and whether it was present.
 func (c *Cache[V]) Get(key string) (V, bool) {
 	if c == nil {
 		var zero V
@@ -24,6 +26,7 @@ func (c *Cache[V]) Get(key string) (V, bool) {
 	return v, ok
 }
 
+// Set stores v under key.
 func (c *Cache[V]) Set(key string, v V) {
 	if c == nil {
 		return
@@ -33,6 +36,7 @@ func (c *Cache[V]) Set(key string, v V) {
 	c.m[key] = v
 }
 
+// Delete removes key, if present.
 func (c *Cache[V]) Delete(key string) {
 	if c == nil {
 		return
@@ -57,4 +61,5 @@ func (c *Cache[V]) Keys() []string {
 	return keys
 }
 
+// Len returns the number of entries.
 func (c *Cache[V]) Len() int { return len(c.Keys()) }

@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -31,8 +32,7 @@ var sections = []string{"profiles", "theme", "glyphs", "layout"}
 func ParseFile(text, file string, env Env, homedir string) (FileData, error) {
 	var doc map[string]any
 	if err := toml.Unmarshal([]byte(text), &doc); err != nil {
-		var de *toml.DecodeError
-		if errors.As(err, &de) {
+		if de, ok := errors.AsType[*toml.DecodeError](err); ok {
 			return FileData{}, errorf("%s: %s", file, de.String())
 		}
 		return FileData{}, errorf("%s: %v", file, err)
@@ -40,7 +40,7 @@ func ParseFile(text, file string, env Env, homedir string) (FileData, error) {
 	order := orderKeys(text)
 
 	for _, key := range order.keys("", doc) {
-		if !contains(sections, key) {
+		if !slices.Contains(sections, key) {
 			names := make([]string, len(sections))
 			for i, s := range sections {
 				names[i] = "[" + s + "]"
@@ -111,14 +111,15 @@ func parseProfile(label string, value any, file string, env Env, homedir string)
 			return ProfileDir{}, errorf("%s: profiles.%s has an unknown provider \"%s\" (expected \"opencode\" or \"claude-code\")", file, label, name)
 		}
 		dv, hasDir := v["dir"]
-		if hasDir {
+		switch {
+		case hasDir:
 			field += ".dir"
 			if raw, ok = dv.(string); !ok {
 				return ProfileDir{}, errorf("%s: %s must be a string path", file, field)
 			}
-		} else if provider == domain.Opencode {
+		case provider == domain.Opencode:
 			return ProfileDir{Label: label, Dir: DefaultOpencodeDir(env, homedir), Source: SourceConfig, Provider: provider}, nil
-		} else {
+		default:
 			return ProfileDir{}, errorf("%s: profiles.%s needs a dir", file, label)
 		}
 	default:
@@ -136,15 +137,6 @@ func parseProfile(label string, value any, file string, env Env, homedir string)
 		return ProfileDir{}, errorf("%s: %s = \"%s\" is not absolute (use an absolute path or ~)", file, field, raw)
 	}
 	return ProfileDir{Label: label, Dir: filepath.Clean(dir), Source: SourceConfig, Provider: provider}, nil
-}
-
-func contains(list []string, s string) bool {
-	for _, v := range list {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }
 
 // table returns v as a table; nil (no error) when v is absent. Arrays, scalars and TOML dates

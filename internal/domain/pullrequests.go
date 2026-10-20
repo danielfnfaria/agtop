@@ -73,16 +73,16 @@ func prKey(pr PullRequestRef) string {
 	return strings.ToLower(pr.Owner) + "/" + strings.ToLower(pr.Repo) + "#" + strconv.Itoa(pr.Number)
 }
 
-func lastN(prs []PullRequestRef, max int) []PullRequestRef {
-	if len(prs) > max {
-		return prs[len(prs)-max:]
+func lastN(prs []PullRequestRef, limit int) []PullRequestRef {
+	if len(prs) > limit {
+		return prs[len(prs)-limit:]
 	}
 	return prs
 }
 
 // ExtractPullRequests returns the PR references in text, in order of appearance, deduplicated,
-// at most max (the last ones).
-func ExtractPullRequests(text string, max int) []PullRequestRef {
+// at most limit (the last ones).
+func ExtractPullRequests(text string, limit int) []PullRequestRef {
 	if !strings.Contains(text, "github.com/") {
 		return []PullRequestRef{}
 	}
@@ -111,13 +111,13 @@ func ExtractPullRequests(text string, max int) []PullRequestRef {
 		seen[k] = true
 		found = append(found, pr)
 	}
-	return lastN(found, max)
+	return lastN(found, limit)
 }
 
 // AddPullRequests returns list plus the PRs of more not in it yet, keeping the order of
-// appearance (a PR seen again keeps its place) and only the last max. It returns list itself
+// appearance (a PR seen again keeps its place) and only the last limit. It returns list itself
 // when nothing is new.
-func AddPullRequests(list, more []PullRequestRef, max int) []PullRequestRef {
+func AddPullRequests(list, more []PullRequestRef, limit int) []PullRequestRef {
 	if len(more) == 0 {
 		return list
 	}
@@ -139,5 +139,5 @@ func AddPullRequests(list, more []PullRequestRef, max int) []PullRequestRef {
 	}
 	all := make([]PullRequestRef, 0, len(list)+len(fresh))
 	all = append(append(all, list...), fresh...)
-	return lastN(all, max)
+	return lastN(all, limit)
 }

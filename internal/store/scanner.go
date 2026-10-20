@@ -45,7 +45,12 @@ func (s *Store) discover() discovery.Result {
 			continue
 		}
 		provider := src.Provider()
-		res, err := src.Discover(group)
+		res, err := src.Discover(s.ctx, group)
+		if s.cancelled(err) {
+			// The store is stopping: not a failure of the source; keep its last good result.
+			out.Profiles = append(out.Profiles, s.lastGood[provider]...)
+			continue
+		}
 		if err != nil {
 			code := errorCode(err)
 			if s.lastScanCode[provider] != code {

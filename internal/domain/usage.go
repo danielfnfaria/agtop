@@ -22,7 +22,7 @@ const (
 	MaxUsageFileBytes = 4096
 	// UsageFileVersion is the version of the usage file format.
 	UsageFileVersion = 1
-	// UsageStaleMs: the usage file is stale once its last write is older than this.
+	// UsageStaleMs is the age of the last write after which the usage file is stale.
 	UsageStaleMs = 10 * 60_000
 )
 

@@ -79,6 +79,7 @@ type Deps struct {
 // OSFS reads from the operating system.
 type OSFS struct{}
 
+// ReadFile returns the file content as a string.
 func (OSFS) ReadFile(path string) (string, error) {
 	b, err := os.ReadFile(path)
 	return string(b), err
@@ -87,6 +88,7 @@ func (OSFS) ReadFile(path string) (string, error) {
 // OSProc looks processes up over the operating system.
 type OSProc struct{}
 
+// Lookup describes the process with the given pid.
 func (OSProc) Lookup(pid int) (proc.Info, error) { return proc.Lookup(pid) }
 
 // NewDeps are the collaborators over the real system.
@@ -260,7 +262,7 @@ func (c *Closer) readRecord(card Card) (record, error) {
 	path := filepath.Join(card.ProfileDir, "sessions", strconv.Itoa(card.PID)+".json")
 	text, err := c.deps.FS.ReadFile(path)
 	if err != nil {
-		return record{}, fmt.Errorf("%w: %v", ErrRecordGone, err)
+		return record{}, fmt.Errorf("%w: %w", ErrRecordGone, err)
 	}
 	var raw map[string]any
 	if json.Unmarshal([]byte(text), &raw) != nil {

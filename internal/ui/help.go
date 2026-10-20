@@ -49,7 +49,6 @@ func (p painter) drawHelp(c *canvas, y, rows int, errors []string, profiles []co
 		if !multi && k[0] == profileKey {
 			continue
 		}
-		k := k
 		lines = append(lines, func(c *canvas, x, y, w int) {
 			c.line(x, y, min(w, helpKeyWidth), ell, fg(k[0], t.Accent))
 			c.line(x+helpKeyWidth, y, w-helpKeyWidth, ell, plain(k[1]))
@@ -59,11 +58,9 @@ func (p painter) drawHelp(c *canvas, y, rows int, errors []string, profiles []co
 		"The screen shows only metadata (titles, models, counts, tool names);",
 		"never prompts, commands or outputs.",
 	} {
-		text := text
 		lines = append(lines, func(c *canvas, x, y, w int) { c.line(x, y, w, ell, seg{text, muted}) })
 	}
 	for _, pr := range profiles {
-		pr := pr
 		lines = append(lines, func(c *canvas, x, y, w int) {
 			if !multi {
 				c.lineMiddle(x, y, w, ell, seg{"config " + clip(pr.Dir), muted})

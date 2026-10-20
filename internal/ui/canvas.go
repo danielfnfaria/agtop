@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -99,11 +100,11 @@ func headCells(cells []cell, width int) []cell {
 // tailCells keeps the trailing cells that fit in width columns.
 func tailCells(cells []cell, width int) []cell {
 	used := 0
-	for i := len(cells) - 1; i >= 0; i-- {
-		if used+cells[i].w > width {
+	for i, cl := range slices.Backward(cells) {
+		if used+cl.w > width {
 			return cells[i+1:]
 		}
-		used += cells[i].w
+		used += cl.w
 	}
 	return cells
 }
@@ -178,7 +179,7 @@ func (c *canvas) lineMiddle(x, y, width int, ellipsis string, segs ...seg) int {
 
 // blit copies rows [from, from+n) of src to this canvas from row y.
 func (c *canvas) blit(src *canvas, from, n, y int) {
-	for i := 0; i < n; i++ {
+	for i := range n {
 		sy, dy := from+i, y+i
 		if sy < 0 || sy >= src.h || dy < c.clipY0 || dy >= c.clipY1 {
 			continue
@@ -211,7 +212,7 @@ func (r renderer) render(c *canvas) string {
 				run.Reset()
 			}
 		}
-		for x := 0; x < end; x++ {
+		for x := range end {
 			cl := row[x]
 			if cl.cont {
 				continue

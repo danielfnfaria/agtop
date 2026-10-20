@@ -43,11 +43,11 @@ func NewContainmentRoot(fs FS, dir string) (ContainmentRoot, bool) {
 	if err != nil {
 		return ContainmentRoot{}, false
 	}
-	real, err := fs.Realpath(dir)
+	resolved, err := fs.Realpath(dir)
 	if err != nil {
 		return ContainmentRoot{}, false
 	}
-	return ContainmentRoot{Dir: abs, Real: real}, true
+	return ContainmentRoot{Dir: abs, Real: resolved}, true
 }
 
 // ResolveContained returns the canonical path of candidate if it is lexically under root.Dir,
@@ -56,9 +56,9 @@ func ResolveContained(fs FS, root ContainmentRoot, candidate string) (string, bo
 	if !IsInside(root.Dir, candidate) {
 		return "", false
 	}
-	real, err := fs.Realpath(candidate)
-	if err != nil || !IsInside(root.Real, real) {
+	resolved, err := fs.Realpath(candidate)
+	if err != nil || !IsInside(root.Real, resolved) {
 		return "", false
 	}
-	return real, true
+	return resolved, true
 }

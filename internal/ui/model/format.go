@@ -25,11 +25,11 @@ const DefaultEllipsis = "…"
 // jsRound rounds half up, like Math.round.
 func jsRound(x float64) float64 { return math.Floor(x + 0.5) }
 
-// Clip cuts s to max characters (code points) with an ellipsis. Control characters (C0, DEL and
+// Clip cuts s to limit characters (code points) with an ellipsis. Control characters (C0, DEL and
 // C1, including newline, tab and the ESC of ANSI sequences) become spaces first, so a title can
 // neither deform the layout nor inject terminal sequences.
-func Clip(s string, max int, ellipsis string) string {
-	if max <= 0 {
+func Clip(s string, limit int, ellipsis string) string {
+	if limit <= 0 {
 		return ""
 	}
 	clean := strings.Map(func(r rune) rune {
@@ -38,11 +38,11 @@ func Clip(s string, max int, ellipsis string) string {
 		}
 		return r
 	}, s)
-	if utf8.RuneCountInString(clean) <= max {
+	if utf8.RuneCountInString(clean) <= limit {
 		return clean
 	}
 	runes := []rune(clean)
-	return string(runes[:max-1]) + ellipsis
+	return string(runes[:limit-1]) + ellipsis
 }
 
 // toFixed1 formats x with one decimal like JavaScript's toFixed(1): exact ties round up.
@@ -258,7 +258,7 @@ func ShortModel(model, ellipsis string) string {
 }
 
 func allDigits(s string) bool {
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		if s[i] < '0' || s[i] > '9' {
 			return false
 		}

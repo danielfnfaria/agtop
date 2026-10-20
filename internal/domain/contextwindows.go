@@ -20,9 +20,9 @@ const (
 	ContextFileVersion = 1
 	// MaxContextSessions is the most sessions kept; beyond it the oldest entries go.
 	MaxContextSessions = 64
-	// ContextEntryMaxAgeMs: entries older than this are dropped on write.
+	// ContextEntryMaxAgeMs is the age beyond which entries are dropped on write.
 	ContextEntryMaxAgeMs = 30 * 24 * 60 * 60_000
-	// ContextRewriteAfterMs: an unchanged entry is still rewritten after this long.
+	// ContextRewriteAfterMs is the age after which an unchanged entry is still rewritten.
 	ContextRewriteAfterMs = 10 * 60_000
 
 	minWindow = 1000

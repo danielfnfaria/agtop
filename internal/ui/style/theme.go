@@ -97,10 +97,15 @@ func ResolveTheme(c ThemeConfig) Theme {
 type Activity string
 
 const (
-	ActivityBusy    Activity = "busy"
-	ActivityShell   Activity = "shell"
+	// ActivityBusy is a session working on a turn.
+	ActivityBusy Activity = "busy"
+	// ActivityShell is a session running a shell command.
+	ActivityShell Activity = "shell"
+	// ActivityWaiting is a session waiting for the user.
 	ActivityWaiting Activity = "waiting"
-	ActivityIdle    Activity = "idle"
+	// ActivityIdle is a session with nothing running.
+	ActivityIdle Activity = "idle"
+	// ActivityUnknown is a session whose activity could not be determined.
 	ActivityUnknown Activity = "unknown"
 )
 

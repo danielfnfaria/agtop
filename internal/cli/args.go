@@ -1,3 +1,4 @@
+// Package cli parses the command line and runs each agtop command.
 package cli
 
 import (
@@ -23,7 +24,7 @@ const (
 	ModeHelp Mode = iota
 	// ModeVersion prints the version.
 	ModeVersion
-	// ModeInvalid: some directory failed validation (already reported on stderr).
+	// ModeInvalid means some directory failed validation (already reported on stderr).
 	ModeInvalid
 	// ModeDump runs one scan and prints a JSON summary.
 	ModeDump

@@ -8,6 +8,7 @@ const (
 	CommandNav CommandKind = iota + 1
 	// CommandRedraw repaints the whole screen.
 	CommandRedraw
+	// CommandQuit exits the app.
 	CommandQuit
 	// CommandClose asks to close the selected session (handled by the app).
 	CommandClose

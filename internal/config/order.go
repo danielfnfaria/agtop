@@ -1,6 +1,7 @@
 package config
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2/unstable"
@@ -12,10 +13,8 @@ type keyOrder map[string][]string
 
 func (o keyOrder) add(path []string, key string) {
 	p := strings.Join(path, "\x00")
-	for _, k := range o[p] {
-		if k == key {
-			return
-		}
+	if slices.Contains(o[p], key) {
+		return
 	}
 	o[p] = append(o[p], key)
 }

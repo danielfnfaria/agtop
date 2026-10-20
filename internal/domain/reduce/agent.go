@@ -27,8 +27,8 @@ func handedBackBeforeKill(a domain.AgentState, ts int64) bool {
 		a.FinishedAt != 0 && ts != 0 && ts <= a.FinishedAt
 }
 
-// ReduceAgent applies an event of the agent's own transcript.
-func ReduceAgent(state domain.AgentState, event domain.TranscriptEvent) domain.AgentState {
+// Agent applies an event of the agent's own transcript.
+func Agent(state domain.AgentState, event domain.TranscriptEvent) domain.AgentState {
 	a, _ := reduceAgent(state, event)
 	return a
 }
@@ -113,9 +113,9 @@ func reduceAgent(state domain.AgentState, event domain.TranscriptEvent) (domain.
 	return a, changed
 }
 
-// ReduceSessionAgent applies an event of the transcript agent-<agentID>.jsonl to that agent of
+// SessionAgent applies an event of the transcript agent-<agentID>.jsonl to that agent of
 // the session.
-func ReduceSessionAgent(session domain.SessionState, agentID string, event domain.TranscriptEvent) domain.SessionState {
+func SessionAgent(session domain.SessionState, agentID string, event domain.TranscriptEvent) domain.SessionState {
 	key, found := FindAgentKey(session.Agents, agentID, "")
 	var existing domain.AgentState
 	var seen *domain.ActivityState
@@ -145,10 +145,10 @@ func ReduceSessionAgent(session domain.SessionState, agentID string, event domai
 	return putAgent(s, agent, key)
 }
 
-// ReduceSessionAgentEvents applies the events of an agent transcript in order.
-func ReduceSessionAgentEvents(session domain.SessionState, agentID string, events []domain.TranscriptEvent) domain.SessionState {
+// SessionAgentEvents applies the events of an agent transcript in order.
+func SessionAgentEvents(session domain.SessionState, agentID string, events []domain.TranscriptEvent) domain.SessionState {
 	for _, event := range events {
-		session = ReduceSessionAgent(session, agentID, event)
+		session = SessionAgent(session, agentID, event)
 	}
 	return session
 }

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -22,11 +23,11 @@ const SettleDelay = 100 * time.Millisecond
 type Op int
 
 const (
-	// Add: the path appeared.
+	// Add means the path appeared.
 	Add Op = iota
-	// Change: the path was written to or touched.
+	// Change means the path was written to or touched.
 	Change
-	// Unlink: the path was removed or renamed away.
+	// Unlink means the path was removed or renamed away.
 	Unlink
 )
 
@@ -84,12 +85,7 @@ func (t Target) watchesName(name string) bool {
 	if t.Kind != KindFiles || name == "" {
 		return false
 	}
-	for _, n := range strings.Split(t.Names, "\n") {
-		if n == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(strings.Split(t.Names, "\n"), name)
 }
 
 // Watcher reports the changes of one Target.
@@ -118,8 +114,11 @@ var subagentFileRE = regexp.MustCompile(`^agent-.+(?:\.jsonl|\.meta\.json)$`)
 type EntryKind int
 
 const (
+	// KindUnknown means the caller does not know the type.
 	KindUnknown EntryKind = iota
+	// KindFile is a regular file.
 	KindFile
+	// KindDir is a directory.
 	KindDir
 )
 

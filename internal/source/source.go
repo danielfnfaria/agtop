@@ -10,6 +10,8 @@
 package source
 
 import (
+	"context"
+
 	"github.com/danielfnfaria/agtop/internal/config"
 	"github.com/danielfnfaria/agtop/internal/discovery"
 	"github.com/danielfnfaria/agtop/internal/domain"
@@ -29,9 +31,9 @@ type TranscriptRead struct {
 }
 
 // TranscriptReader reads a transcript incrementally: each Read returns what grew since the
-// last one.
+// last one. A cancelled ctx aborts the read with its error.
 type TranscriptReader interface {
-	Read() (TranscriptRead, error)
+	Read(ctx context.Context) (TranscriptRead, error)
 	Close() error
 }
 
@@ -42,8 +44,9 @@ type Source interface {
 	// Discover scans the given profiles once (all of this provider): live sessions (one per
 	// session id) with their files, the inactive ones and per-profile diagnostics. With an
 	// error the result may still hold the profiles it could scan (the store uses them, else its
-	// last good result of the source); the error is reported by its code.
-	Discover(profiles []config.ProfileDir) (discovery.Result, error)
+	// last good result of the source); the error is reported by its code. A cancelled ctx aborts the scan; the
+	// error then wraps ctx.Err() and is not a failure of the source.
+	Discover(ctx context.Context, profiles []config.ProfileDir) (discovery.Result, error)
 	// RegistryWatch is the target whose events mean the live set of profile may have changed
 	// (the store watches it and scans on any event); false when there is nothing to watch yet.
 	RegistryWatch(profile config.ProfileDir) (watcher.Target, bool)
@@ -54,12 +57,13 @@ type Source interface {
 	// files are).
 	ForgetSession(profile config.ProfileDir, sessionID string)
 	// OpenTranscript opens a transcript returned by Discover or ListAgents (a path, for file
-	// sources). The caller closes it.
-	OpenTranscript(ref string) (TranscriptReader, error)
+	// sources). The caller closes it. ctx bounds the opening only.
+	OpenTranscript(ctx context.Context, ref string) (TranscriptReader, error)
 	// ListAgents lists the validated agent files in the agents directory of a session
 	// (SessionFiles.SubagentsDir). resolved (one per directory, kept by the store) caches name
-	// to path between calls.
-	ListAgents(agentsDir string, resolved map[string]string) []discovery.SubagentFiles
+	// to path between calls. A cancelled ctx
+	// ends the listing early with what it has (none for a database source).
+	ListAgents(ctx context.Context, agentsDir string, resolved map[string]string) []discovery.SubagentFiles
 	// ReadAgentMeta reads an agent metadata file returned by ListAgents.
 	ReadAgentMeta(file string) discovery.AgentMetaResult
 	// FileSignature is a cheap change signature of a file ("size:mtimeMs"); false if unknown.

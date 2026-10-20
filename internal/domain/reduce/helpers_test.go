@@ -41,7 +41,7 @@ func fixtureEvents(t *testing.T, name string) []domain.TranscriptEvent {
 
 func mainSession(t *testing.T) domain.SessionState {
 	t.Helper()
-	return ReduceSessionEvents(NewSessionState("sess-0001"), fixtureEvents(t, "session-main"))
+	return SessionEvents(NewSessionState("sess-0001"), fixtureEvents(t, "session-main"))
 }
 
 func agentOf(t *testing.T, s domain.SessionState, key string) domain.AgentState {

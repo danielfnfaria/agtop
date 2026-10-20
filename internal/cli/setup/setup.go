@@ -323,8 +323,8 @@ func backup(file string, now time.Time) (string, error) {
 // keeps the mode of an existing file; a new one gets newMode.
 func writeAtomic(file, text string, newMode fs.FileMode) (err error) {
 	target, mode := file, newMode
-	if real, rerr := filepath.EvalSymlinks(file); rerr == nil {
-		target = real
+	if resolved, rerr := filepath.EvalSymlinks(file); rerr == nil {
+		target = resolved
 		st, serr := os.Stat(target)
 		if serr != nil {
 			return serr

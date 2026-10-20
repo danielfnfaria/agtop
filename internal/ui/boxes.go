@@ -241,13 +241,14 @@ func (p painter) sessionBox(c *canvas, x, y int, s *store.SessionView, selected,
 	c.line(cx, row, sessionContent, g.Ellipsis, p.prLine(s.PRs, isStale)...)
 	row++
 
-	if isStale {
+	switch {
+	case isStale:
 		c.line(cx, row, sessionContent, g.Ellipsis,
 			fg(g.Dot+" "+p.ago(s.StaleSince, "ended ", " ago", "ended"), t.Muted))
-	} else if isPending {
+	case isPending:
 		c.line(cx, row, sessionContent, g.Ellipsis,
 			fg(g.Dot, t.Pending), plain(" bg "+g.Middot+" not started"))
-	} else {
+	default:
 		c.line(cx, row, sessionContent, g.Ellipsis,
 			fg(g.Dot, style.ActivityColor(style.Activity(s.Activity), t)),
 			plain(" "+style.ActivityText(style.Activity(s.Activity), s.RawStatus)+" "+g.Middot+" "+

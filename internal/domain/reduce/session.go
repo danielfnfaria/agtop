@@ -220,8 +220,8 @@ func applyMessageModel(session domain.SessionState, model string) domain.Session
 	return session
 }
 
-// ReduceSession applies an event of the session's own transcript.
-func ReduceSession(state domain.SessionState, event domain.TranscriptEvent) domain.SessionState {
+// Session applies an event of the session's own transcript.
+func Session(state domain.SessionState, event domain.TranscriptEvent) domain.SessionState {
 	s := state
 	touch(&s.ActivityState, event.EventTimestamp())
 	switch ev := event.(type) {
@@ -305,10 +305,10 @@ func ReduceSession(state domain.SessionState, event domain.TranscriptEvent) doma
 	return s
 }
 
-// ReduceSessionEvents applies events in order.
-func ReduceSessionEvents(state domain.SessionState, events []domain.TranscriptEvent) domain.SessionState {
+// SessionEvents applies events in order.
+func SessionEvents(state domain.SessionState, events []domain.TranscriptEvent) domain.SessionState {
 	for _, event := range events {
-		state = ReduceSession(state, event)
+		state = Session(state, event)
 	}
 	return state
 }

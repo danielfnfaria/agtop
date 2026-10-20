@@ -3,9 +3,11 @@ package setup
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -64,7 +66,7 @@ func ParseJSON(text string) (any, error) {
 		var probe any
 		err := json.Unmarshal([]byte(text), &probe)
 		if err == nil {
-			err = fmt.Errorf("invalid JSON")
+			err = errors.New("invalid JSON")
 		}
 		return nil, err
 	}
@@ -104,7 +106,11 @@ func decodeValue(dec *json.Decoder) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		obj.set(k.(string), v)
+		key, ok := k.(string)
+		if !ok {
+			return nil, errors.New("invalid JSON object key")
+		}
+		obj.set(key, v)
 	}
 	_, err = dec.Token()
 	return obj, err
@@ -133,7 +139,7 @@ func writeValue(w io.StringWriter, v any, indent, cur string) {
 	case nil:
 		_, _ = w.WriteString("null")
 	case bool:
-		_, _ = w.WriteString(fmt.Sprint(x))
+		_, _ = w.WriteString(strconv.FormatBool(x))
 	case json.Number:
 		_, _ = w.WriteString(x.String())
 	case string:
@@ -172,6 +178,8 @@ func writeValue(w io.StringWriter, v any, indent, cur string) {
 		}
 		_, _ = w.WriteString(nl(cur) + "}")
 	default:
+		// Unreachable: values only come from decodeValue and the plan builders. Returning an
+		// error would leak into every caller of marshalJSON/FormatJSON for a programming bug.
 		panic(fmt.Sprintf("setup: unsupported JSON value %T", v))
 	}
 }

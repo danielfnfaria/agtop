@@ -1,3 +1,4 @@
+// Package ui is the full-screen terminal viewer: it renders the session tree and detail views and handles input.
 package ui
 
 import (
@@ -578,13 +579,14 @@ func (a *App) emptyMessage(filter string) string {
 	if filter != "" {
 		return "no sessions in profile " + filter + " (p changes the filter)"
 	}
-	dirs := ""
+	var db strings.Builder
 	for i, p := range a.profiles {
 		if i > 0 {
-			dirs += ", "
+			db.WriteString(", ")
 		}
-		dirs += p.Dir
+		db.WriteString(p.Dir)
 	}
+	dirs := db.String()
 	if a.snap.ScannedAt == 0 {
 		return "looking for sessions in " + dirs
 	}
@@ -615,11 +617,7 @@ func (p painter) segments(c *canvas, x, y, width int, segs []model.Segment) {
 }
 
 func (p painter) divider(c *canvas, y int) {
-	line := ""
-	for i := 0; i < c.w; i++ {
-		line += p.g.Line.Horizontal
-	}
-	c.line(0, y, c.w, p.g.Ellipsis, fg(line, p.t.Muted))
+	c.line(0, y, c.w, p.g.Ellipsis, fg(strings.Repeat(p.g.Line.Horizontal, c.w), p.t.Muted))
 }
 
 // loadingScreen is the screen before the first snapshot: the watched directories, wrapped to
@@ -627,11 +625,11 @@ func (p painter) divider(c *canvas, y int) {
 func (p painter) loadingScreen(r renderer, width int, profiles []config.ProfileDir, loading bool) string {
 	t := p.t
 	line := func(segs ...seg) string {
-		out := ""
+		var out strings.Builder
 		for _, s := range segs {
-			out += r.styled(s.text, s.st)
+			out.WriteString(r.styled(s.text, s.st))
 		}
-		return ansi.Wrap(out, max(1, width), "")
+		return ansi.Wrap(out.String(), max(1, width), "")
 	}
 	lines := []string{line(seg{"agtop", sty{bold: true}}), line(plain("Watched directories:"))}
 	for _, pr := range profiles {

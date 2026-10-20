@@ -6,9 +6,11 @@ import (
 )
 
 const (
-	// EnvXDGConfigHome and EnvClaudeConfigDir are the environment variables the config reads.
-	EnvXDGConfigHome   = "XDG_CONFIG_HOME"
-	EnvXDGDataHome     = "XDG_DATA_HOME"
+	// EnvXDGConfigHome is the environment variable naming the XDG base directory for user config.
+	EnvXDGConfigHome = "XDG_CONFIG_HOME"
+	// EnvXDGDataHome is the environment variable naming the XDG base directory for user data.
+	EnvXDGDataHome = "XDG_DATA_HOME"
+	// EnvClaudeConfigDir overrides the Claude Code config directory.
 	EnvClaudeConfigDir = "CLAUDE_CONFIG_DIR"
 )
 

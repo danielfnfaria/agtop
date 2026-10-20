@@ -2,6 +2,7 @@ package style
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -22,12 +23,7 @@ func IsHex(s string) bool { return hexColor.MatchString(s) }
 
 // IsTone reports whether s is one of ToneNames.
 func IsTone(s string) bool {
-	for _, n := range ToneNames {
-		if n == s {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ToneNames, s)
 }
 
 // IsColor reports whether s is a tone name or a hex color.

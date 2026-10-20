@@ -1,6 +1,7 @@
 package claudecode
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -70,7 +71,7 @@ func TestSourceDiscoversAndListsAgents(t *testing.T) {
 	if target, ok := src.RegistryWatch(profile); !ok || target != wantRegistry {
 		t.Errorf("RegistryWatch = %+v, %v", target, ok)
 	}
-	res, err := src.Discover([]config.ProfileDir{profile})
+	res, err := src.Discover(context.Background(), []config.ProfileDir{profile})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +80,7 @@ func TestSourceDiscoversAndListsAgents(t *testing.T) {
 		t.Fatalf("live = %+v", live)
 	}
 
-	agents := src.ListAgents(live[0].Files.SubagentsDir, map[string]string{})
+	agents := src.ListAgents(context.Background(), live[0].Files.SubagentsDir, map[string]string{})
 	if len(agents) != 1 || agents[0].AgentID != "q1" {
 		t.Fatalf("agents = %+v", agents)
 	}
@@ -96,16 +97,16 @@ func TestSourceDiscoversAndListsAgents(t *testing.T) {
 	if _, ok := src.SessionWatch("", ""); ok {
 		t.Error("SessionWatch must be absent without paths")
 	}
-	reader, err := src.OpenTranscript(live[0].Files.TranscriptPath)
+	reader, err := src.OpenTranscript(context.Background(), live[0].Files.TranscriptPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer reader.Close()
-	if got, err := reader.Read(); err != nil || got.Reset || len(got.Events) != 1 {
+	if got, err := reader.Read(context.Background()); err != nil || got.Reset || len(got.Events) != 1 {
 		t.Errorf("first Read = %+v, %v", got, err)
 	}
 	appendFile(t, live[0].Files.TranscriptPath, "not json\n")
-	if got, err := reader.Read(); err != nil || len(got.Events) != 1 || got.Events[0].EventKind() != "parse_error" {
+	if got, err := reader.Read(context.Background()); err != nil || len(got.Events) != 1 || got.Events[0].EventKind() != "parse_error" {
 		t.Errorf("Read = %+v, %v", got, err)
 	}
 }
@@ -133,12 +134,12 @@ func TestFileReaderResetAndWarnings(t *testing.T) {
 	src := New(deps, func(p string) (Tailer, error) { return tailer.New(p, tailer.WithMaxLineBytes(50)) })
 
 	writeFile(t, file, "{\"a\":1}\n"+strings.Repeat("x", 100)+"\n")
-	reader, err := src.OpenTranscript(file)
+	reader, err := src.OpenTranscript(context.Background(), file)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer reader.Close()
-	got, err := reader.Read()
+	got, err := reader.Read(context.Background())
 	if err != nil || got.Reset || len(got.Events) != 1 ||
 		!reflect.DeepEqual(got.Warnings, []string{"oversized line dropped: " + file}) {
 		t.Fatalf("Read = %+v, %v", got, err)
@@ -146,20 +147,20 @@ func TestFileReaderResetAndWarnings(t *testing.T) {
 
 	// Truncated: the reader reports the reset and nothing else.
 	writeFile(t, file, "")
-	got, err = reader.Read()
+	got, err = reader.Read(context.Background())
 	if err != nil || !got.Reset || len(got.Events) != 0 || len(got.Warnings) != 0 {
 		t.Errorf("truncated Read = %+v, %v", got, err)
 	}
 
 	// Rotated: removed and recreated.
 	writeFile(t, file, "{\"a\":1}\n{\"b\":2}\n")
-	if _, err := reader.Read(); err != nil {
+	if _, err := reader.Read(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(file); err != nil {
 		t.Fatal(err)
 	}
-	got, err = reader.Read()
+	got, err = reader.Read(context.Background())
 	if err != nil || !got.Reset {
 		t.Errorf("removed Read = %+v, %v", got, err)
 	}

@@ -49,9 +49,9 @@ func TestGoldenState(t *testing.T) {
 			}
 			s := NewSessionState("golden")
 			if agentID != "" {
-				s = ReduceSessionAgentEvents(s, agentID, events)
+				s = SessionAgentEvents(s, agentID, events)
 			} else {
-				s = ReduceSessionEvents(s, events)
+				s = SessionEvents(s, events)
 			}
 			expectGolden(t, s, name)
 		})
@@ -68,11 +68,11 @@ func TestGoldenStateReadOrders(t *testing.T) {
 		name := p.session + "+" + p.agent
 		main, sub := fixtureEvents(t, p.session), fixtureEvents(t, p.agent)
 		t.Run(name+"/session-first", func(t *testing.T) {
-			s := ReduceSessionAgentEvents(ReduceSessionEvents(NewSessionState("golden"), main), p.agentID, sub)
+			s := SessionAgentEvents(SessionEvents(NewSessionState("golden"), main), p.agentID, sub)
 			expectGolden(t, s, name+".session-first")
 		})
 		t.Run(name+"/agent-first", func(t *testing.T) {
-			s := ReduceSessionEvents(ReduceSessionAgentEvents(NewSessionState("golden"), p.agentID, sub), main)
+			s := SessionEvents(SessionAgentEvents(NewSessionState("golden"), p.agentID, sub), main)
 			expectGolden(t, s, name+".agent-first")
 		})
 	}

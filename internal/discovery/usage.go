@@ -20,11 +20,11 @@ func UsageDir(claudeDir string) string { return filepath.Join(claudeDir, domain.
 type ReadKind string
 
 const (
-	// ReadOK: the file was read and is valid.
+	// ReadOK means the file was read and is valid.
 	ReadOK ReadKind = "ok"
-	// ReadMissing: no file (or not inside the profile directory).
+	// ReadMissing means no file (or not inside the profile directory).
 	ReadMissing ReadKind = "missing"
-	// ReadError: unreadable or invalid; Code is a short code, never file content: TOO_LARGE,
+	// ReadError means unreadable or invalid; Code is a short code, never file content: TOO_LARGE,
 	// INVALID_JSON, INVALID, or the errno name of the read.
 	ReadError ReadKind = "error"
 )

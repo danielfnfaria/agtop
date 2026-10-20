@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"runtime/debug"
@@ -34,8 +35,12 @@ type Store struct {
 	deps    Deps
 	sources []source.Source
 
-	inbox   chan func()
-	stopCh  chan struct{}
+	inbox  chan func()
+	stopCh chan struct{}
+	// ctx is cancelled by Stop: it bounds the I/O of the sources (database reads) so a stop does
+	// not wait for them.
+	ctx     context.Context
+	cancel  context.CancelFunc
 	done    chan struct{}
 	updates chan struct{}
 	snap    atomic.Pointer[Snapshot]
@@ -103,12 +108,15 @@ func New(opts Options, deps Deps) *Store {
 	if len(d.Sources) == 0 {
 		d.Sources = []source.Source{claudecode.New(d.Discovery, d.NewTailer), opencode.New(opencode.Options{})}
 	}
+	ctx, cancel := context.WithCancel(context.Background())
 	s := &Store{
 		opts:           opts,
 		deps:           d,
 		sources:        d.Sources,
 		inbox:          make(chan func(), 1024),
 		stopCh:         make(chan struct{}),
+		ctx:            ctx,
+		cancel:         cancel,
 		done:           make(chan struct{}),
 		updates:        make(chan struct{}, 1),
 		closers:        map[io.Closer]struct{}{},
@@ -231,6 +239,7 @@ func (s *Store) Stop() {
 		s.closers = nil
 		s.mu.Unlock()
 		close(s.stopCh)
+		s.cancel()
 		for c := range closers {
 			_ = c.Close()
 		}

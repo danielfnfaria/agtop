@@ -20,10 +20,10 @@ import (
 )
 
 const (
-	// MaxPayloadBytes: larger payloads are passed through but not parsed.
+	// MaxPayloadBytes is the size limit above which payloads are passed through but not parsed.
 	MaxPayloadBytes = 1024 * 1024
-	// RewriteAfterMs: an unchanged usage file is still rewritten after this long (keeps
-	// updatedAt fresh).
+	// RewriteAfterMs is how long after which an unchanged usage file is still
+	// rewritten (keeps updatedAt fresh).
 	RewriteAfterMs = 60_000
 )
 
@@ -71,9 +71,9 @@ func FormatStatusLine(limits domain.RateLimits) string {
 	return strings.Join(parts, " · ")
 }
 
-// Run runs the hook and returns the exit code, always 0. With print, it prints FormatStatusLine
+// Run runs the hook and returns the exit code, always 0. With printLine, it prints FormatStatusLine
 // instead of copying stdin to stdout (used when there is no other status line command to feed).
-func Run(h IO, print bool) int {
+func Run(h IO, printLine bool) int {
 	// debug reports a short message, with the errno name of err when it has one (never the
 	// error text, which may quote a path).
 	debug := func(what string, err error, fallback string) {
@@ -99,7 +99,7 @@ func Run(h IO, print bool) int {
 	}()
 	// A read error leaves what arrived so far.
 	input, _ := io.ReadAll(h.Stdin)
-	if !print {
+	if !printLine {
 		// Pass the bytes on first: the user's status line should not wait for the files.
 		if _, err := h.Stdout.Write(input); err != nil {
 			debug("stdout", err, "WRITE")
@@ -120,7 +120,7 @@ func Run(h IO, print bool) int {
 			debug("context failed", err, "error")
 		}
 	}
-	if print {
+	if printLine {
 		if _, err := io.WriteString(h.Stdout, FormatStatusLine(limits)+"\n"); err != nil {
 			debug("stdout", err, "WRITE")
 		}

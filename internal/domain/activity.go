@@ -1,6 +1,9 @@
 package domain
 
-import "math/bits"
+import (
+	"maps"
+	"math/bits"
+)
 
 const (
 	// ActivityBucketMs is the width of a bucket, in ms.
@@ -66,9 +69,7 @@ func PruneActivity(h ActivityHistogram, minBucket int64) ActivityHistogram {
 
 func cloneHistogram(h ActivityHistogram) ActivityHistogram {
 	out := make(ActivityHistogram, len(h)+1)
-	for k, v := range h {
-		out[k] = v
-	}
+	maps.Copy(out, h)
 	return out
 }
 

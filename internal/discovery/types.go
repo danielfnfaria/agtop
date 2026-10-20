@@ -35,9 +35,9 @@ func NewDeps() Deps {
 type LocateKind string
 
 const (
-	// LocateFound: Project is the projects/ folder where the transcript is.
+	// LocateFound means Project is the projects/ folder where the transcript is.
 	LocateFound LocateKind = "found"
-	// LocateMissing: no transcript at the last scan; no new scan until Until (epoch ms).
+	// LocateMissing means no transcript at the last scan; no new scan until Until (epoch ms).
 	// Project is where only the session folder was found, if it was.
 	LocateMissing LocateKind = "missing"
 )
@@ -54,6 +54,7 @@ type LocateEntry struct {
 // Anything else is unknown.
 type Activity string
 
+// Known Activity values.
 const (
 	ActivityBusy    Activity = "busy"
 	ActivityShell   Activity = "shell"
@@ -65,6 +66,7 @@ const (
 // DeadReason is why a record is not alive.
 type DeadReason string
 
+// Known DeadReason values.
 const (
 	DeadPid     DeadReason = "dead_pid"
 	DeadPreBoot DeadReason = "pre_boot"
@@ -97,6 +99,7 @@ type LiveSessionRecord struct {
 // IssueReason is why a registry file was ignored.
 type IssueReason string
 
+// Known IssueReason values.
 const (
 	IssueTooLarge         IssueReason = "too_large"
 	IssueReadError        IssueReason = "read_error"
@@ -106,7 +109,7 @@ const (
 	IssueInvalidPID       IssueReason = "invalid_pid"
 	IssuePIDMismatch      IssueReason = "pid_mismatch"
 	IssueInvalidSessionID IssueReason = "invalid_session_id"
-	// IssueDatabase: a provider database (File) could not be read; the store error says why.
+	// IssueDatabase means a provider database (File) could not be read; the store error says why.
 	IssueDatabase IssueReason = "database"
 )
 
@@ -159,10 +162,11 @@ type DiscoveredSession struct {
 // InactiveReason is why a session is not in Live.
 type InactiveReason string
 
+// Known InactiveReason values.
 const (
 	InactiveDeadPid InactiveReason = "dead_pid"
 	InactivePreBoot InactiveReason = "pre_boot"
-	// InactiveDuplicate: the pid is alive but the same sessionId is already live with a more
+	// InactiveDuplicate means the pid is alive but the same sessionId is already live with a more
 	// recent record.
 	InactiveDuplicate InactiveReason = "duplicate"
 )
