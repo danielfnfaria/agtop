@@ -51,3 +51,10 @@ jobs:
           version: "~> v2"
           args: release --snapshot --clean --skip=publish
       - run: ./dist/agtop_linux_amd64_v1/agtop --version
+      - name: check the deb and rpm packages
+        run: |
+          for arch in amd64 arm64; do
+            dpkg-deb --info dist/agtop_*_linux_${arch}.deb
+            dpkg-deb --contents dist/agtop_*_linux_${arch}.deb | grep -q ' ./usr/bin/agtop$'
+            test -s dist/agtop_*_linux_${arch}.rpm
+          done

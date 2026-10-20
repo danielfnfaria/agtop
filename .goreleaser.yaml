@@ -27,6 +27,21 @@ archives:
     files:
       - LICENSE
 
+nfpms:
+  - id: agtop
+    package_name: agtop
+    file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    vendor: agtop
+    maintainer: Daniel Faria <13805473+danielfnfaria@users.noreply.github.com>
+    homepage: https://github.com/danielfnfaria/agtop
+    description: Live terminal view of Claude Code sessions and their subagents
+    license: MIT
+    formats: [deb, rpm]
+    bindir: /usr/bin
+    contents:
+      - src: LICENSE
+        dst: /usr/share/doc/agtop/LICENSE
+
 checksum:
   name_template: checksums.txt
 
