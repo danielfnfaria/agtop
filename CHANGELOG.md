@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/danielfnfaria/agtop/compare/v0.2.1...v0.3.0) (2026-10-22)
+
+
+### Features
+
+* publish deb and rpm packages with each release ([#19](https://github.com/danielfnfaria/agtop/issues/19)) ([5c639fd](https://github.com/danielfnfaria/agtop/commit/5c639fdf83b5240be102d41a6a5d63c7a8b5926b))
+
 ## [0.2.1](https://github.com/danielfnfaria/agtop/compare/v0.2.0...v0.2.1) (2026-10-19)
 
 
