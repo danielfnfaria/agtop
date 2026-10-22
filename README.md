@@ -47,6 +47,14 @@ Homebrew (macOS):
 brew install danielfnfaria/tap/agtop
 ```
 
+Debian/Ubuntu and Fedora/RHEL (amd64/arm64): download the package from the
+[latest release](https://github.com/danielfnfaria/agtop/releases/latest):
+
+```bash
+sudo apt install ./agtop_<version>_linux_amd64.deb   # Debian, Ubuntu
+sudo dnf install ./agtop_<version>_linux_amd64.rpm   # Fedora, RHEL
+```
+
 Script (macOS and Linux, amd64/arm64; installs to `~/.local/bin`):
 
 ```bash
