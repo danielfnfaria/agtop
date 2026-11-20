@@ -7,7 +7,9 @@
 A live terminal UI for the Claude Code sessions running on your machine and the
 sub-agents each one launched. Think `htop`, but for your agents.
 
-Each session is a box with its active agents hanging below it:
+Each session is a box. Its agents hang below it as a nested tree: an agent spawned by
+another agent sits under its parent, at any depth, and each parent is centered over its
+own subtree.
 
 <p align="center">
   <img src=".github/assets/screenshot.png" alt="agtop showing two Claude Code sessions, one with four sub-agents running" width="49%">
@@ -18,15 +20,16 @@ What you see:
 
 - **Top bar**: one line per profile with the 5-hour and 7-day plan usage, their reset
   times, and the profile's recent activity.
-- **Session boxes**: title, model and effort, context usage, active and total agents,
-  pull request links (`#201`, clickable in the terminal) and the session state, colored
-  by state: busy (yellow), shell (cyan, a background command is running), waiting (red,
-  it needs you), idle (green) and pending (gray, a background session that has not
-  started yet).
-- **Agent boxes**: agent name, model, duration and what it is doing right now (writing
+- **Session boxes**: profile, model, effort and context usage on one line; active and
+  total agents plus pull request links (`#201`, clickable in the terminal) on the next;
+  the title and the session state on the border, colored by state: busy (yellow), shell
+  (cyan, a background command is running), waiting (red, it needs you), idle (green) and
+  pending (gray, a background session that has not started yet).
+- **Agent boxes**: agent type, duration, model and what it is doing right now (writing
   code, reading, searching, running tests, building, git...).
-- **Detail view** (Enter): every agent of the session, including finished ones, with
-  status, tokens and pending tools.
+- **Fit**: box sizes follow the terminal, in both width and height. See [Layout](#layout).
+- **Detail view** (Enter): every agent of the session, including finished ones, each
+  indented by its depth in the tree, with status, tokens and pending tools.
 
 agtop only shows metadata. Prompts, commands and tool outputs are never displayed or
 stored: from a Bash command it keeps only a category (tests, build, git...), and from
@@ -183,6 +186,25 @@ The context bar takes the window size from, in this order:
 Unknown models use 200k, and if usage goes past the table window agtop assumes 1M; both
 are marked with `~` (estimated). Without `agtop setup`, only 3, 4 and this estimate apply.
 
+## Layout
+
+The tree is drawn to the terminal it has, in both width and height. Boxes come in
+steps, and agtop keeps shrinking them while shrinking puts more agents on screen:
+
+| | Steps |
+| --- | --- |
+| Agent box | 26x5, 20x5, 14x4, 13x3 |
+| Session box | 34x4, 28x3, 22x2 |
+
+An agent box drops its model first, then its description, and at the smallest step
+keeps only the type, the spinner and the duration. A session box replaces its labels
+with glyphs at 28x3, and at 22x2 keeps only the title and the state. A level of the
+tree never uses a larger step than the level above it, and a session with no active
+agent steps down before the others, since it has no tree to show underneath.
+
+Shrinking that buys no extra agent on screen is not done, so a screen crowded by
+session boxes keeps them readable instead. When nothing fits, the tree scrolls.
+
 ## Keys
 
 | Key | Action |
@@ -206,7 +228,8 @@ agtop only reads files Claude Code already writes. Apart from the optional
   that the process is still alive and ignores records from before the last boot.
 - `projects/<project>/<sessionId>.jsonl` is the session transcript, read incrementally.
 - `projects/<project>/<sessionId>/subagents/agent-<id>.jsonl` and `.meta.json` hold
-  each sub-agent's transcript and metadata.
+  each sub-agent's transcript and metadata, including `parentAgentId`, which is how
+  agtop rebuilds the hierarchy of the tree.
 
 Without a terminal on stdin or stdout (a pipe or a redirection), agtop renders once and
 exits.
@@ -221,6 +244,8 @@ exits.
   you quit.
 - The tree shows open sessions (a session that closes stays 30 s marked as ended) and
   only their active agents. The full agent history is in the detail view.
+- An agent whose parent is unknown, no longer shown, or part of a cycle is drawn as a
+  root of the tree.
 - opencode keeps no session registry: each running `opencode` process is shown as the most
   recently touched session of its working directory that was touched since the process started.
   So a session resumed from `/sessions` appears at its first new message, and `x` closes the
