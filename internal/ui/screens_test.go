@@ -1,11 +1,13 @@
 package ui
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/danielfnfaria/agtop/internal/config"
 	"github.com/danielfnfaria/agtop/internal/domain"
 	"github.com/danielfnfaria/agtop/internal/store"
 )
@@ -68,25 +70,44 @@ func TestAgoAndDurationFollowTheClock(t *testing.T) {
 	o := testOptions(newFakeStore(snapshot([]*store.SessionView{s}, profiles)), profiles)
 	o.Now = func() int64 { return tm }
 	a := newApp(o, 100, 30)
-	mustContain(t, screen(a), "0s ago")
+	// The time of the last activity rides on the title bar of the session box, the duration of
+	// the agent on its own box.
+	mustContain(t, screen(a), "idle 0s")
 	tm += 7_000
 	a.Update(clockMsg{})
-	mustContain(t, screen(a), "7s ago", "7s │")
+	mustContain(t, screen(a), "idle 7s", "7s │")
 	tm += 120_000
 	a.Update(clockMsg{})
-	mustContain(t, screen(a), "2m ago", "2m07s")
+	mustContain(t, screen(a), "idle 2m", "2m07s")
 }
 
 func TestTopBarHidesBeforeTheTreeLosesABox(t *testing.T) {
+	// The session box takes four rows and shrinks down to two (three with the label of the
+	// profile), so the top bar fits every terminal the viewer draws at all: it gives way only
+	// when the bar itself is tall, one row per profile watched, and not before the smallest box
+	// with its scroll indicators runs out of rows.
 	a := newApp(fiveStore(), 100, 20)
 	mustContain(t, screen(a), "5h ")
 	a.Update(tea.WindowSizeMsg{Width: 100, Height: 15})
-	f := screen(a)
+	mustContain(t, screen(a), "5h ", "Alpha task")
+
+	var many []config.ProfileDir
+	for i := range 6 {
+		many = append(many, config.ProfileDir{Label: "p" + strconv.Itoa(i), Dir: "/tmp/p", Source: "config"})
+	}
+	snap := snapshot(fiveSessions(), many)
+	tall := newApp(testOptions(newFakeStore(snap), many), 100, 20)
+	mustContain(t, screen(tall), "5h ")
+	// One row over it the bar stays: the boxes have a step of their own to drop (see
+	// model.SessionStep), so the tree still shows a box of its own with the indicators.
+	tall.Update(tea.WindowSizeMsg{Width: 100, Height: 15})
+	mustContain(t, screen(tall), "5h ", "Alpha t")
+
+	tall.Update(tea.WindowSizeMsg{Width: 100, Height: 14})
+	f := screen(tall)
 	mustNotContain(t, f, "5h ")
 	mustContain(t, f, "Alpha task")
-	if n := len(strings.Split(f, "\n")); n != 14 {
-		t.Errorf("%d lines at 100x15", n)
+	if n := len(strings.Split(f, "\n")); n != 13 {
+		t.Errorf("%d lines at 100x14", n)
 	}
-	a.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
-	mustContain(t, screen(a), "5h ")
 }

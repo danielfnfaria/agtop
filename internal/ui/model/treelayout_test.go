@@ -48,18 +48,18 @@ func sessions(n, agents int) []TreeSession {
 
 // cluster lays a session out the way the tree does: the steps are picked by the width.
 func cluster(s TreeSession, maxWidth int) ClusterLayout {
-	return NewClusterLayout(s, maxWidth, SessionHeight, PickStepPlan(s, maxWidth), line)
+	return NewClusterLayout(s, maxWidth, SessionFull.Size(false), SessionFull, PickStepPlan(s, maxWidth), line)
 }
 
 // clusterStep forces one step for every level, to exercise the wrapping of a tree that does not
 // fit.
 func clusterStep(s TreeSession, maxWidth int, step AgentStep) ClusterLayout {
-	return NewClusterLayout(s, maxWidth, SessionHeight, StepPlan{step}, line)
+	return NewClusterLayout(s, maxWidth, SessionFull.Size(false), SessionFull, StepPlan{step}, line)
 }
 
 // layoutOf lays the sessions out with no height limit, so only the width picks the steps.
 func layoutOf(s []TreeSession, columns int) TreeLayout {
-	return NewTreeLayout(s, columns, UnlimitedRows, SessionHeight, line)
+	return NewTreeLayout(s, columns, UnlimitedRows, false, line)
 }
 
 // agentRows are the agent boxes by row, each row from left to right.
@@ -397,6 +397,7 @@ func TestClusterLayout(t *testing.T) {
 			t.Errorf("width = %d", c.Width)
 		}
 		checkCentered(t, c, session("s", 5).Agents)
+		checkBuses(t, c, session("s", 5).Agents)
 	})
 }
 
@@ -408,7 +409,7 @@ func TestTreeLayout(t *testing.T) {
 			t.Errorf("layout = %+v", l)
 		}
 		vp := l.Viewport(40, "s0", 0)
-		if vp.Scrolling || vp.OffsetY != 16 || vp.Top != 0 {
+		if vp.Scrolling || vp.OffsetY != (40-SessionHeight)/2 || vp.Top != 0 {
 			t.Errorf("viewport = %+v", vp)
 		}
 	})
@@ -490,29 +491,29 @@ func TestTreeLayout(t *testing.T) {
 }
 
 func TestTreeViewport(t *testing.T) {
-	l := layoutOf(sessions(6, 0), 60) // 6 rows of 7 + 5 gaps = 47 rows
+	l := layoutOf(sessions(6, 0), 60) // 6 rows of 4 + 5 gaps = 29 rows
 
 	if vp := l.Viewport(UnlimitedRows, "s0", 0); vp.Scrolling || vp.OffsetY != 0 || vp.Top != 0 {
 		t.Errorf("unlimited = %+v", vp)
 	}
-	if l.ContentHeight != 47 {
+	if l.ContentHeight != 29 {
 		t.Fatalf("content height = %d", l.ContentHeight)
 	}
-	first := l.Viewport(22, "s0", 0)
-	if want := (TreeViewport{Top: 0, ViewRows: 20, Scrolling: true, Below: true}); first != want {
+	first := l.Viewport(12, "s0", 0)
+	if want := (TreeViewport{Top: 0, ViewRows: 10, Scrolling: true, Below: true}); first != want {
 		t.Errorf("first = %+v", first)
 	}
-	// s2 starts at row 16 and ends at 23: the 20-row window ends at 23.
-	third := l.Viewport(22, "s2", first.Top)
-	if third.Top != 3 || !third.Above || !third.Below {
+	// s2 starts at row 10 and ends at 14: the 10-row window ends at 14.
+	third := l.Viewport(12, "s2", first.Top)
+	if third.Top != 4 || !third.Above || !third.Below {
 		t.Errorf("third = %+v", third)
 	}
-	// s1 (8..15) is already visible.
-	if back := l.Viewport(22, "s1", third.Top); back.Top != 3 {
+	// s1 (5..9) is already visible.
+	if back := l.Viewport(12, "s1", third.Top); back.Top != 4 {
 		t.Errorf("back = %+v", back)
 	}
-	last := l.Viewport(22, "s5", 3)
-	if last.Top != 27 || !last.Above || last.Below {
+	last := l.Viewport(12, "s5", 4)
+	if last.Top != 19 || !last.Above || last.Below {
 		t.Errorf("last = %+v", last)
 	}
 }
@@ -521,14 +522,14 @@ func TestTreeViewport(t *testing.T) {
 // width but not the body shrinks until it does, and keeps the readable boxes when no step fits.
 func TestTreeLayoutFitsTheHeight(t *testing.T) {
 	// A chain four deep is one box wide, so the width alone leaves it at the full step. Its
-	// height is the session box, the stem and a row per level: 32 rows at the full step and at
-	// 20 columns of box, 28 at 14 and 24 at 13.
+	// height is the session box, the stem and a row per level: 29 rows at the full step and at
+	// 20 columns of box, 25 at 14 and 21 at 13.
 	deep := []TreeSession{{Key: "s", Agents: []TreeAgent{chain("d", 4)}}}
-	layout := func(rows int) TreeLayout { return NewTreeLayout(deep, 140, rows, SessionHeight, line) }
+	layout := func(rows int) TreeLayout { return NewTreeLayout(deep, 140, rows, false, line) }
 
 	t.Run("no limit: the width alone picks the step", func(t *testing.T) {
 		l := layout(UnlimitedRows)
-		if steps := clusterSteps(t, l.Rows[0].Clusters[0]); steps.At(0) != StepFull || l.ContentHeight != 32 {
+		if steps := clusterSteps(t, l.Rows[0].Clusters[0]); steps.At(0) != StepFull || l.ContentHeight != 29 {
 			t.Errorf("steps %v height %d", steps, l.ContentHeight)
 		}
 	})
@@ -539,8 +540,8 @@ func TestTreeLayoutFitsTheHeight(t *testing.T) {
 			want   AgentStep
 			height int
 		}{
-			{40, StepFull, 32}, {32, StepFull, 32}, {31, StepCompact, 28}, {28, StepCompact, 28},
-			{27, StepTiny, 24}, {24, StepTiny, 24},
+			{40, StepFull, 29}, {29, StepFull, 29}, {28, StepCompact, 25}, {25, StepCompact, 25},
+			{24, StepTiny, 21}, {21, StepTiny, 21},
 		}
 		for _, tt := range tests {
 			l := layout(tt.rows)
@@ -554,53 +555,74 @@ func TestTreeLayoutFitsTheHeight(t *testing.T) {
 		}
 	})
 
-	t.Run("not even the smallest step fits: shrinking reads more agents, so it shrinks", func(t *testing.T) {
-		// The chain in a body of 20 rows: no step fits, and the smaller boxes bring one more
-		// agent whole into the body, so the tree takes them and the rest scrolls.
-		counts := stepCounts(deep, 140, 20)
-		l := layout(20)
-		got := wholeBoxes(l, 20)
-		if got != slices.Max(counts) || got <= counts[StepFull] {
-			t.Errorf("whole boxes %d, by step %v", got, counts)
+	t.Run("not even the smallest boxes fit: the tree reads as many agents as it can", func(t *testing.T) {
+		// The chain in a body of 12 rows: no candidate fits, and the smallest session box brings
+		// more of the chain into those rows than any agent step does on its own, so the tree
+		// takes it and the rest scrolls.
+		counts := stepCounts(deep, 140, 12)
+		l := layout(12)
+		got := wholeBoxes(l, 12)
+		if got <= slices.Max(counts) {
+			t.Errorf("whole boxes %d, by agent step with the full session box %v", got, counts)
 		}
-		if l.ContentHeight <= 20 {
+		if l.ContentHeight <= 12 {
 			t.Errorf("content height %d", l.ContentHeight)
 		}
 		checkSteps(t, l.Rows[0].Clusters[0])
-		if vp := l.Viewport(20, "s", 0); !vp.Scrolling || !vp.Below {
+		if vp := l.Viewport(12, "s", 0); !vp.Scrolling || !vp.Below {
 			t.Errorf("viewport = %+v", vp)
 		}
 	})
 
-	t.Run("not even the smallest step fits: shrinking reads no more, so the boxes stay", func(t *testing.T) {
-		// Five sessions with one agent each in 100 columns: two clusters per row, three rows of
-		// them and more content than the body however small the agents get. The session boxes
-		// have a fixed height, so shrinking brings no further agent into the body and the full
-		// boxes, which read better, stay.
+	t.Run("the session boxes give back the rows the agents had to lose", func(t *testing.T) {
+		// Five sessions with one agent each in 100 columns: three rows of full session boxes
+		// overflow a body of 24 rows, and no agent step saves it. The session boxes shrink
+		// instead, which fits one more cluster per row, and the agent boxes grow back to the
+		// step the width allows (see regrow).
 		five := sessions(5, 1)
-		counts := stepCounts(five, 100, 30)
-		l := NewTreeLayout(five, 100, 30, SessionHeight, line)
-		got := wholeBoxes(l, 30)
-		if got != slices.Max(counts) || got != counts[StepFull] {
-			t.Errorf("whole boxes %d, by step %v", got, counts)
+		l := NewTreeLayout(five, 100, 24, false, line)
+		if l.ContentHeight > 24 {
+			t.Errorf("content height %d over the 24 rows", l.ContentHeight)
 		}
-		if l.ContentHeight <= 30 {
-			t.Errorf("content height %d", l.ContentHeight)
+		if got := wholeBoxes(l, 24); got != 5 {
+			t.Errorf("whole agent boxes = %d, want the 5 of them", got)
 		}
 		c := l.Rows[0].Clusters[0]
-		if steps := clusterSteps(t, c); steps.At(0) != StepFull {
-			t.Errorf("steps %v", steps)
+		if c.SessionStep != SessionCompact || c.SessionBox != SessionCompact.Size(false) {
+			t.Errorf("session step %d box %+v", c.SessionStep, c.SessionBox)
 		}
-		checkSteps(t, c)
+		if steps := clusterSteps(t, c); steps.At(0) != StepFull {
+			t.Errorf("agent steps %v, want the full box back", steps)
+		}
+		checkCluster(t, c, 100, []string{"s0-a0"})
 	})
 
-	t.Run("enough session boxes overflow on their own and still scroll", func(t *testing.T) {
-		// Six sessions with no agents, one per row: 47 rows of session boxes in 20 rows of body.
-		l := NewTreeLayout(sessions(6, 0), 60, 20, SessionHeight, line)
-		if len(l.Rows) != 6 || l.ContentHeight != 6*SessionHeight+5 {
-			t.Fatalf("layout = %+v", l)
+	t.Run("the session boxes alone make room for sessions with no agents", func(t *testing.T) {
+		// Nine sessions with no agents in 60 columns: 44 rows of full boxes in a body of 20.
+		// They have no tree under them, so they shrink first and end up two to a row.
+		l := NewTreeLayout(sessions(9, 0), 60, 20, false, line)
+		if l.ContentHeight > 20 || len(l.Rows) != 5 {
+			t.Fatalf("content height %d in %d rows", l.ContentHeight, len(l.Rows))
 		}
-		if vp := l.Viewport(20, "s0", 0); !vp.Scrolling || !vp.Below {
+		for _, row := range l.Rows {
+			for _, c := range row.Clusters {
+				if c.SessionStep != SessionCompact || c.Height != SessionCompact.Size(false).Height {
+					t.Errorf("%s: step %d height %d", c.Key, c.SessionStep, c.Height)
+				}
+			}
+		}
+		if vp := l.Viewport(20, "s0", 0); vp.Scrolling {
+			t.Errorf("viewport = %+v", vp)
+		}
+	})
+
+	t.Run("enough sessions overflow the body whatever the boxes and still scroll", func(t *testing.T) {
+		// Six sessions with an agent each in a body of 10 rows: not even the smallest boxes fit.
+		l := NewTreeLayout(sessions(6, 1), 60, 10, false, line)
+		if l.ContentHeight <= 10 {
+			t.Fatalf("content height %d", l.ContentHeight)
+		}
+		if vp := l.Viewport(10, "s0", 0); !vp.Scrolling || !vp.Below {
 			t.Errorf("viewport = %+v", vp)
 		}
 	})
@@ -613,11 +635,11 @@ func TestTreeLayoutFitsTheHeight(t *testing.T) {
 			fan8.Agents[0].Children = append(fan8.Agents[0].Children, TreeAgent{Key: fmt.Sprint("c", i)})
 		}
 		one := []TreeSession{fan8}
-		wide := NewTreeLayout(one, 100, UnlimitedRows, SessionHeight, line)
+		wide := NewTreeLayout(one, 100, UnlimitedRows, false, line)
 		if got := clusterSteps(t, wide.Rows[0].Clusters[0]); !slices.Equal(got, StepPlan{StepFull, StepNoModel}) {
 			t.Fatalf("plan of the width = %v", got)
 		}
-		short := NewTreeLayout(one, 100, wide.ContentHeight-1, SessionHeight, line)
+		short := NewTreeLayout(one, 100, wide.ContentHeight-1, false, line)
 		c := short.Rows[0].Clusters[0]
 		if got := clusterSteps(t, c); !slices.Equal(got, StepPlan{StepNoModel, StepCompact}) {
 			t.Errorf("plan in %d rows = %v", wide.ContentHeight-1, got)
@@ -630,36 +652,243 @@ func TestTreeLayoutFitsTheHeight(t *testing.T) {
 }
 
 func TestSessionBoxHeight(t *testing.T) {
-	if SessionBoxHeight(false) != SessionHeight || SessionBoxHeight(true) != SessionHeightMulti || SessionHeightMulti != SessionHeight+1 {
-		t.Error("box heights")
+	// The label of the profile is a field of the content line, so watching a second profile
+	// costs no height; only the smallest step, which has no content line of its own, takes a
+	// line for it.
+	if SessionFull.Size(false).Height != SessionHeight || SessionFull.Size(true).Height != SessionHeight {
+		t.Errorf("box heights %d / %d", SessionFull.Size(false).Height, SessionFull.Size(true).Height)
 	}
-	h := SessionHeightMulti
-	c := NewClusterLayout(session("s", 1), 140, h, StepPlan{StepFull}, line)
+	if got := SessionTiny.Size(true).Height; got != SessionTiny.Size(false).Height+1 {
+		t.Errorf("the smallest box with profiles = %d", got)
+	}
+
+	h := SessionHeight
+	c := NewClusterLayout(session("s", 1), 140, SessionFull.Size(true), SessionFull, StepPlan{StepFull}, line)
 	if c.Stem.Y != h || c.Agents[0].Y != h+2 || c.Buses[0].Y != h+1 || c.Height != h+2+AgentHeight {
 		t.Errorf("cluster = %+v", c)
 	}
-	if got := NewClusterLayout(session("t", 0), 140, h, StepPlan{StepFull}, line).Height; got != h {
+	if got := NewClusterLayout(session("t", 0), 140, SessionFull.Size(true), SessionFull, StepPlan{StepFull}, line).Height; got != h {
 		t.Errorf("empty cluster height = %d", got)
 	}
-	l := NewTreeLayout(sessions(4, 0), 140, UnlimitedRows, h, line)
-	if l.SessionHeight != h || l.Rows[1].Y != h+1 || l.ContentHeight != 2*h+1 {
+	l := NewTreeLayout(sessions(4, 0), 140, UnlimitedRows, true, line)
+	if l.Rows[1].Y != h+1 || l.ContentHeight != 2*h+1 {
 		t.Errorf("layout = %+v", l)
 	}
 
-	// The viewport keeps the whole taller box of the selection visible.
-	six := NewTreeLayout(sessions(6, 0), 60, UnlimitedRows, h, line) // 6 rows of 8 + 5 gaps = 53
+	// The viewport keeps the whole box of the selection visible.
+	six := NewTreeLayout(sessions(6, 0), 60, UnlimitedRows, true, line) // 6 rows of 4 + 5 gaps = 29
 	first := six.Viewport(22, "s0", 0)
-	if six.ContentHeight != 53 || first.Top != 0 || first.ViewRows != 20 {
+	if six.ContentHeight != 6*h+5 || first.Top != 0 || first.ViewRows != 20 {
 		t.Errorf("first = %+v (%d)", first, six.ContentHeight)
 	}
-	// s2 starts at row 18 and ends at 26: the 20-row window ends at 26.
-	if got := six.Viewport(22, "s2", first.Top).Top; got != 6 {
+	// s5 starts at row 25 and ends at 29: the 20-row window ends at 29.
+	if got := six.Viewport(22, "s5", first.Top).Top; got != 9 {
 		t.Errorf("top = %d", got)
 	}
-	one := NewTreeLayout(sessions(1, 0), 60, UnlimitedRows, h, line)
-	if vp := one.Viewport(20, "s0", 0); vp.Scrolling || vp.OffsetY != 6 {
+	one := NewTreeLayout(sessions(1, 0), 60, UnlimitedRows, true, line)
+	if vp := one.Viewport(20, "s0", 0); vp.Scrolling || vp.OffsetY != (20-h)/2 {
 		t.Errorf("one = %+v", vp)
 	}
+}
+
+// fanSession is a session with roots first-level agents, each with children of its own.
+func fanSession(key string, roots, children int) TreeSession {
+	s := TreeSession{Key: key}
+	for i := range roots {
+		root := nestedAgent(fmt.Sprintf("%s-r%d", key, i))
+		for j := range children {
+			root.Children = append(root.Children, TreeAgent{Key: fmt.Sprintf("%s-r%dc%d", key, i, j)})
+		}
+		s.Agents = append(s.Agents, root)
+	}
+	return s
+}
+
+// TestSessionSteps covers the steps of the session box: their sizes, when they are taken and
+// what the rest of the layout makes of boxes that no longer share one height.
+func TestSessionSteps(t *testing.T) {
+	t.Run("the steps only get smaller, and a profile adds a line to each", func(t *testing.T) {
+		if SessionFull.Size(false) != (SessionSize{SessionWidth, SessionHeight}) ||
+			SessionFull.Size(true) != SessionFull.Size(false) {
+			t.Errorf("full box = %+v / %+v", SessionFull.Size(false), SessionFull.Size(true))
+		}
+		for step := SessionFull; step < SmallestSessionStep; step++ {
+			this, next := step.Size(false), (step + 1).Size(false)
+			if next.Width > this.Width || next.Height >= this.Height {
+				t.Errorf("step %d %+v is not smaller than step %d %+v", step+1, next, step, this)
+			}
+			if multi := step.Size(true); multi.Height != this.Height || multi.Width != this.Width {
+				t.Errorf("step %d with profiles = %+v", step, multi)
+			}
+		}
+		if SmallestSessionStep.Size(false).Height < 2 {
+			t.Error("the smallest box has no room for its two borders")
+		}
+		if got := SessionStep(99).Size(false); got != SessionFull.Size(false) {
+			t.Errorf("step out of range = %+v", got)
+		}
+	})
+
+	t.Run("the agent boxes are exhausted before a session box shrinks", func(t *testing.T) {
+		// The chain four deep (see TestTreeLayoutFitsTheHeight) at 21 rows: the agents are at
+		// the smallest step and the session box is still the full one.
+		deep := []TreeSession{{Key: "s", Agents: []TreeAgent{chain("d", 4)}}}
+		c := NewTreeLayout(deep, 140, 21, false, line).Rows[0].Clusters[0]
+		if steps := clusterSteps(t, c); steps.At(0) != SmallestStep || c.SessionStep != SessionFull {
+			t.Errorf("agent steps %v, session step %d", clusterSteps(t, c), c.SessionStep)
+		}
+		// One row less and the session box is the only thing left to give it.
+		if got := NewTreeLayout(deep, 140, 20, false, line).Rows[0].Clusters[0]; got.SessionStep == SessionFull {
+			t.Errorf("session step %d at 20 rows", got.SessionStep)
+		}
+	})
+
+	t.Run("a session with no active agents shrinks one step ahead", func(t *testing.T) {
+		// An idle session and one with a tree of twelve agents in a body of 24 rows: the idle
+		// box, with no tree of its own, is a step ahead of the busy one all the way down.
+		idle := []TreeSession{{Key: "idle"}, fanSession("busy", 3, 3)}
+		l := NewTreeLayout(idle, 100, 24, false, line)
+		if l.ContentHeight > 24 {
+			t.Fatalf("content height %d over the 24 rows", l.ContentHeight)
+		}
+		steps := map[string]SessionStep{}
+		for _, row := range l.Rows {
+			for _, c := range row.Clusters {
+				steps[c.Key] = c.SessionStep
+			}
+		}
+		if steps["idle"] != SessionTiny || steps["busy"] != SessionCompact {
+			t.Errorf("steps = %v, want the idle box one step ahead of the busy one", steps)
+		}
+	})
+
+	t.Run("the round of the demotion puts the idle sessions a step ahead", func(t *testing.T) {
+		all := []TreeSession{{Key: "idle"}, session("busy", 1)}
+		want := [][]SessionStep{
+			{SessionFull, SessionFull},
+			{SessionCompact, SessionFull},
+			{SessionTiny, SessionCompact},
+			{SessionTiny, SessionTiny},
+		}
+		for round, want := range want {
+			if got := sessionSteps(all, round); !slices.Equal(got, want) {
+				t.Errorf("round %d = %v, want %v", round, got, want)
+			}
+		}
+	})
+
+	t.Run("no box leaves its cluster at any step", func(t *testing.T) {
+		s := fanSession("s", 3, 2)
+		for step := SessionFull; step <= SmallestSessionStep; step++ {
+			for _, multi := range []bool{false, true} {
+				box := step.Size(multi)
+				c := NewClusterLayout(s, 100, box, step, PickStepPlan(s, 100), line)
+				if c.SessionBox != box || c.SessionStep != step {
+					t.Errorf("step %d: box %+v", step, c.SessionBox)
+				}
+				if c.SessionLeft < 0 || c.SessionLeft+box.Width > c.Width {
+					t.Errorf("step %d: session box at %d..%d of %d", step, c.SessionLeft, c.SessionLeft+box.Width, c.Width)
+				}
+				checkCluster(t, c, 100, allKeys(s.Agents))
+			}
+		}
+	})
+
+	t.Run("the viewport takes the height of the box of the selection", func(t *testing.T) {
+		// Two clusters of different steps: the window has to end at the bottom of the box of the
+		// selected session, whichever height that one has.
+		l := TreeLayout{Columns: 40, ContentHeight: 20, Rows: []ClusterRow{
+			{Y: 0, Height: 7, Clusters: []ClusterLayout{
+				{Key: "a", Y: 0, Width: SessionWidth, Height: 7, SessionStep: SessionFull, SessionBox: SessionFull.Size(false)}}},
+			{Y: 8, Height: 3, Clusters: []ClusterLayout{
+				{Key: "b", Y: 8, Width: 22, Height: 3, SessionStep: SessionTiny, SessionBox: SessionTiny.Size(false)}}},
+		}}
+		// A body of 10 rows leaves a window of 8: the tiny box of b ends at row 10, so the
+		// window starts at 2 (at the height of a full box it would be 4).
+		if got := l.Viewport(10, "b", 0).Top; got != 2 {
+			t.Errorf("top = %d, want 2", got)
+		}
+		if got := l.Viewport(10, "a", 5).Top; got != 0 {
+			t.Errorf("top = %d, want 0", got)
+		}
+		if grid := l.NavGrid(); len(grid) != 2 || grid[0][0].Key != "a" || grid[1][0].Key != "b" {
+			t.Errorf("grid = %+v", grid)
+		}
+	})
+
+	t.Run("the navigation grid keeps every session of a tree of mixed steps", func(t *testing.T) {
+		all := []TreeSession{{Key: "i0"}, session("b0", 2), {Key: "i1"}, session("b1", 2), {Key: "i2"}}
+		want := map[string][]string{}
+		for _, s := range all {
+			want[s.Key] = allKeys(s.Agents)
+		}
+		l := NewTreeLayout(all, 100, 24, false, line)
+		var keys []string
+		for i, row := range l.NavGrid() {
+			if len(row) == 0 {
+				t.Errorf("row %d is empty", i)
+			}
+			for _, cell := range row {
+				keys = append(keys, cell.Key)
+			}
+		}
+		slices.Sort(keys)
+		if want := []string{"b0", "b1", "i0", "i1", "i2"}; !slices.Equal(keys, want) {
+			t.Errorf("grid keys = %v, want %v", keys, want)
+		}
+		for _, row := range l.Rows {
+			for _, c := range row.Clusters {
+				if c.Y != row.Y || c.Height > row.Height {
+					t.Errorf("%s at row %d: y %d height %d of %d", c.Key, row.Y, c.Y, c.Height, row.Height)
+				}
+				checkCluster(t, c, 100, want[c.Key])
+			}
+		}
+	})
+}
+
+// TestSessionStepsFitMoreAgents is the acceptance case: an idle session and one with three roots
+// of three agents each in 100x30. A taller session box made the tree taller than the body, which
+// cut the deepest agents off; the box of today fits the whole tree in the same screen.
+func TestSessionStepsFitMoreAgents(t *testing.T) {
+	// taller is how many rows over the box of today it takes for the body to cut agents off.
+	const taller = 4
+	all := []TreeSession{{Key: "idle"}, fanSession("busy", 3, 3)}
+	l := NewTreeLayout(all, 100, 30, false, line)
+	after := wholeBoxes(l, 30)
+	before := wholeBoxesTallerSession(l, 30, taller)
+	if after <= before {
+		t.Errorf("agents whole in the body: %d with the box of %d rows, %d with one of %d",
+			after, SessionHeight, before, SessionHeight+taller)
+	}
+	if want := len(allKeys(all[1].Agents)); after != want || l.ContentHeight > 30 {
+		t.Errorf("agents whole in the body = %d of %d, content height %d", after, want, l.ContentHeight)
+	}
+	for _, row := range l.Rows {
+		for _, c := range row.Clusters {
+			if c.SessionStep != SessionFull {
+				t.Errorf("%s: step %d, the tree fits with the full boxes", c.Key, c.SessionStep)
+			}
+		}
+	}
+}
+
+// wholeBoxesTallerSession is how many agent boxes would stand whole in rows rows of body if every
+// session box were extra rows taller. The clusters group into the same rows (the width of the box
+// does not change), so every row of clusters starts extra rows lower than the one before it, and
+// the agents of a row carry the boxes of the rows above plus their own.
+func wholeBoxesTallerSession(l TreeLayout, rows, extra int) int {
+	count := 0
+	for i, row := range l.Rows {
+		for _, c := range row.Clusters {
+			for _, a := range c.Agents {
+				if c.Y+a.Y+extra*(i+1)+a.Size().Height <= rows {
+					count++
+				}
+			}
+		}
+	}
+	return count
 }
 
 // nestedAgent is an agent with the given children.
@@ -692,7 +921,7 @@ func stepCounts(s []TreeSession, columns, rows int) []int {
 		for i := range plans {
 			plans[i] = StepPlan{step}
 		}
-		counts[step] = wholeBoxes(placeClusters(s, plans, columns, SessionHeight, line), rows)
+		counts[step] = wholeBoxes(placeClusters(s, plans, columns, sessionSteps(s, 0), false, line), rows)
 	}
 	return counts
 }
@@ -715,9 +944,10 @@ func (r rect) overlaps(o rect) bool {
 	return r.x < o.x+o.width && o.x < r.x+r.width && r.y < o.y+o.height && o.y < r.y+r.height
 }
 
-// boxes is every box of the cluster, the session one included (that one first).
-func boxes(c ClusterLayout, boxHeight int) []rect {
-	out := []rect{{key: c.Key, x: c.SessionLeft, width: SessionWidth, height: boxHeight}}
+// boxes is every box of the cluster, the session one included (that one first), each at the size
+// of its own step.
+func boxes(c ClusterLayout) []rect {
+	out := []rect{{key: c.Key, x: c.SessionLeft, width: c.SessionBox.Width, height: c.SessionBox.Height}}
 	for _, b := range c.Agents {
 		out = append(out, rect{key: b.Key, x: b.X, y: b.Y, width: b.Size().Width, height: b.Size().Height})
 	}
@@ -738,7 +968,7 @@ func allKeys(agents []TreeAgent) []string {
 // the cluster in the width, and every agent shows up exactly once.
 func checkCluster(t *testing.T, c ClusterLayout, maxWidth int, want []string) {
 	t.Helper()
-	all := boxes(c, SessionHeight)
+	all := boxes(c)
 	var keys []string
 	for i, r := range all {
 		if r.x < 0 || r.x+r.width > c.Width {
@@ -785,6 +1015,127 @@ func blockExtent(children []TreeAgent, byKey map[string]AgentBox) (left, right i
 		left, right = min(left, l), max(right, r)
 	}
 	return left, right
+}
+
+// downLinks are the line characters with a link going down.
+var downLinks = []string{vt, dr, dl, vr, vl, hd, cx}
+
+// busLinks are the columns of a connector that rise and the ones that come down.
+func busLinks(b Connector) (ups, downs []int) {
+	for i, ch := range []rune(b.Text) {
+		if slices.Contains(upLinks, string(ch)) {
+			ups = append(ups, b.Left+i)
+		}
+		if slices.Contains(downLinks, string(ch)) {
+			downs = append(downs, b.Left+i)
+		}
+	}
+	return ups, downs
+}
+
+// checkBuses asserts the barring of every parent that launched agents, the session included and
+// whatever the depth: each row its children wrapped into has a connector of its own, right above
+// them, that rises exactly at the stem of the parent and comes down exactly at the center of
+// every child of that row. The rows a wrapped block continued into rise at the trunk instead, and
+// every row but the last of such a block comes down at the trunk too, to carry it on. The first
+// row hangs right under the parent (one row lower for the session, which has a stem of its own).
+func checkBuses(t *testing.T, c ClusterLayout, agents []TreeAgent) {
+	t.Helper()
+	byKey := make(map[string]AgentBox, len(c.Agents))
+	for _, b := range c.Agents {
+		byKey[b.Key] = b
+	}
+	// Siblings share the rows of their children, so a row may carry a bus per parent: the one of
+	// a block is the only one that spans every child of the block.
+	busOver := func(y int, centers []int) (Connector, bool) {
+		var found []Connector
+		for _, b := range c.Buses {
+			if b.Y != y {
+				continue
+			}
+			span := len([]rune(b.Text))
+			covers := true
+			for _, x := range centers {
+				covers = covers && x >= b.Left && x < b.Left+span
+			}
+			if covers {
+				found = append(found, b)
+			}
+		}
+		if len(found) != 1 {
+			return Connector{}, false
+		}
+		return found[0], true
+	}
+	var check func(name string, anchor, firstBusY int, children []TreeAgent)
+	check = func(name string, anchor, firstBusY int, children []TreeAgent) {
+		defer func() {
+			for _, child := range children {
+				b := byKey[child.Key]
+				box := b.Size()
+				check(child.Key, b.X+box.Width/2, b.Y+box.Height, child.Children)
+			}
+		}()
+		if len(children) == 0 {
+			return
+		}
+		// The children of a row share the row of their top, so their tops are the rows the block
+		// wrapped into, and the bus of a row sits right above it.
+		var tops []int
+		centers := map[int][]int{}
+		for _, child := range children {
+			b := byKey[child.Key]
+			if _, seen := centers[b.Y]; !seen {
+				tops = append(tops, b.Y)
+			}
+			centers[b.Y] = append(centers[b.Y], b.X+b.Size().Width/2)
+		}
+		slices.Sort(tops)
+		wrapped, trunkX := len(tops) > 1, 0
+		if wrapped {
+			first, ok := busOver(tops[0]-1, centers[tops[0]])
+			if !ok {
+				t.Fatalf("%s: no bus of its own above its first row of children (row %d)", name, tops[0]-1)
+			}
+			// The trunk runs left of every child and of the stem, so it opens the first bus.
+			trunkX = first.Left
+		}
+		for i, top := range tops {
+			bus, ok := busOver(top-1, centers[top])
+			if !ok {
+				t.Errorf("%s: no bus of its own above the row of children at %d", name, top)
+				continue
+			}
+			if i == 0 && bus.Y != firstBusY {
+				t.Errorf("%s: its first bus is on row %d, want %d", name, bus.Y, firstBusY)
+			}
+			wantUps := []int{anchor}
+			if i > 0 {
+				wantUps = []int{trunkX}
+			}
+			wantDowns := slices.Sorted(slices.Values(centers[top]))
+			if wrapped && i < len(tops)-1 {
+				wantDowns = append([]int{trunkX}, wantDowns...)
+			}
+			ups, downs := busLinks(bus)
+			if !slices.Equal(ups, wantUps) {
+				t.Errorf("%s: the bus on row %d rises at %v, want %v", name, bus.Y, ups, wantUps)
+			}
+			if !slices.Equal(downs, wantDowns) {
+				t.Errorf("%s: the bus on row %d comes down at %v, want %v", name, bus.Y, downs, wantDowns)
+			}
+		}
+	}
+	if len(agents) == 0 {
+		if c.Stem != nil {
+			t.Errorf("a session with no agents has the stem %+v", *c.Stem)
+		}
+		return
+	}
+	if c.Stem == nil || c.Stem.Y != c.SessionBox.Height || c.Stem.Left != c.Anchor {
+		t.Errorf("stem = %+v, box of %d rows anchored at %d", c.Stem, c.SessionBox.Height, c.Anchor)
+	}
+	check(c.Key, c.Anchor, c.SessionBox.Height+1, agents)
 }
 
 // checkCentered asserts every box sits over the center of the block of its children, the rows it
@@ -870,6 +1221,42 @@ func blockRowCount(c ClusterLayout, agents []TreeAgent) int {
 	return count(agents)
 }
 
+// TestBusesBarEveryParent runs the barring invariant over every shape of tree the layout draws,
+// at every width and with the steps forced so the blocks wrap: the tests that pin a bus character
+// by character only cover parents whose children are leaves, and a parent with grandchildren
+// shares the row of its siblings' children.
+func TestBusesBarEveryParent(t *testing.T) {
+	nested := TreeSession{Key: "s", Agents: []TreeAgent{
+		nestedAgent("coord", nestedAgent("exec1", TreeAgent{Key: "leaf"}), TreeAgent{Key: "exec2"}),
+		nestedAgent("other", TreeAgent{Key: "o1"}, TreeAgent{Key: "o2"}, TreeAgent{Key: "o3"},
+			TreeAgent{Key: "o4"}, TreeAgent{Key: "o5"}),
+		{Key: "solo"},
+	}}
+	trees := []struct {
+		name string
+		tree TreeSession
+	}{
+		{"no agents", session("s", 0)},
+		{"one agent", session("s", 1)},
+		{"five agents", session("s", 5)},
+		{"twenty agents", session("s", 20)},
+		{"three roots of three", fanSession("s", 3, 3)},
+		{"eight roots of eight", fanSession("s", 8, 8)},
+		{"a chain eight deep", TreeSession{Key: "s", Agents: []TreeAgent{chain("d", 8)}}},
+		{"nested blocks of their own", nested},
+	}
+	for _, tt := range trees {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, columns := range []int{40, 60, 80, 100, 120, 160, 200} {
+				checkBuses(t, cluster(tt.tree, columns), tt.tree.Agents)
+				for step := StepFull; step <= SmallestStep; step++ {
+					checkBuses(t, clusterStep(tt.tree, columns, step), tt.tree.Agents)
+				}
+			}
+		})
+	}
+}
+
 func TestNestedClusterLayout(t *testing.T) {
 	// coord launched two agents, one of which launched another; solo launched none.
 	nested := TreeSession{Key: "s", Agents: []TreeAgent{
@@ -884,6 +1271,7 @@ func TestNestedClusterLayout(t *testing.T) {
 		}
 		checkCluster(t, c, 100, allKeys(nested.Agents))
 		checkCentered(t, c, nested.Agents)
+		checkBuses(t, c, nested.Agents)
 		checkSteps(t, c)
 		// coord takes its two children side by side (54 columns), solo one box: 82 in all.
 		if c.Width != 82 || c.Anchor != 41 {
@@ -925,6 +1313,7 @@ func TestNestedClusterLayout(t *testing.T) {
 				c := cluster(wide, columns)
 				checkCluster(t, c, columns, allKeys(wide.Agents))
 				checkCentered(t, c, wide.Agents)
+				checkBuses(t, c, wide.Agents)
 				checkSteps(t, c)
 				if got := blockRowCount(c, wide.Agents); got > MaxBlockRows {
 					t.Errorf("%d rows of siblings at steps %v", got, clusterSteps(t, c))
@@ -943,6 +1332,7 @@ func TestNestedClusterLayout(t *testing.T) {
 				c := cluster(fan, columns)
 				checkCluster(t, c, columns, allKeys(fan.Agents))
 				checkCentered(t, c, fan.Agents)
+				checkBuses(t, c, fan.Agents)
 				checkSteps(t, c)
 				if len(c.Trunks) != 1 {
 					t.Errorf("trunks = %+v", c.Trunks)
@@ -968,6 +1358,7 @@ func TestNestedClusterLayout(t *testing.T) {
 				c := cluster(deep, columns)
 				checkCluster(t, c, columns, allKeys(deep.Agents))
 				checkCentered(t, c, deep.Agents)
+				checkBuses(t, c, deep.Agents)
 				checkSteps(t, c)
 				if steps := clusterSteps(t, c); steps.At(0) != StepFull || c.Height != SessionHeight+1+8*(1+AgentHeight) {
 					t.Errorf("steps %v height %d", steps, c.Height)
@@ -986,6 +1377,7 @@ func TestNestedClusterLayout(t *testing.T) {
 			c := cluster(mixed, columns)
 			checkCluster(t, c, columns, allKeys(mixed.Agents))
 			checkCentered(t, c, mixed.Agents)
+			checkBuses(t, c, mixed.Agents)
 			checkSteps(t, c)
 		}
 	})

@@ -247,7 +247,7 @@ func buildTreeModel(sel treeSel, nav model.NavState, columns, bodyRows int, line
 		keys[i] = s.Key
 		trees[i] = model.TreeSession{Key: s.Key, Agents: treeAgents(activeForest(s.Agents))}
 	}
-	layout := model.NewTreeLayout(trees, columns, bodyRows, model.SessionBoxHeight(sel.multiProfile), line)
+	layout := model.NewTreeLayout(trees, columns, bodyRows, sel.multiProfile, line)
 	var agentKeys []string
 	if open := sel.find(nav.DetailKey); open != nil {
 		for _, a := range orderedAgents(open.Agents) {

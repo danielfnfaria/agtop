@@ -64,13 +64,24 @@ func simScenarios() []simScenario {
 		{
 			name:    "dense",
 			forests: [][]simNode{nil, simLevels(3, 3)},
-			sizes:   []simSize{{90, 30}, {100, 30}, {120, 35}, {160, 45}},
+			sizes:   stepSizes,
+		},
+		// many-sessions is the screen the steps of the session box were made for: five sessions,
+		// four of them idle, and one with six agents of its own.
+		{
+			name:    "many-sessions",
+			forests: [][]simNode{nil, nil, simLevels(6), nil, nil},
+			sizes:   stepSizes,
 		},
 	}
 }
 
 // simSize is a terminal to render.
 type simSize struct{ w, h int }
+
+// stepSizes are the terminals the steps of the boxes are judged on: the heights where the tree
+// stops fitting the body.
+var stepSizes = []simSize{{90, 30}, {100, 30}, {120, 30}, {120, 40}, {160, 45}}
 
 // simSizes are real terminal sizes, height included: the tree shrinks to the body as well as to
 // the width (see model.NewTreeLayout), so a tall screen and a short one are different art.

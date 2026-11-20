@@ -24,7 +24,7 @@ func treeSpinning(tm treeModel, vp model.TreeViewport) bool {
 			if s == nil {
 				continue
 			}
-			if busy(s) && inView(vp, cl.Y, tm.layout.SessionHeight) {
+			if busy(s) && inView(vp, cl.Y, cl.SessionBox.Height) {
 				return true
 			}
 			for _, box := range cl.Agents {
@@ -72,7 +72,7 @@ func (p painter) drawTree(c *canvas, y, _ int, tm treeModel, vp model.TreeViewpo
 
 func (p painter) drawCluster(c *canvas, cl model.ClusterLayout, s *store.SessionView, selected, showProfile bool, tone style.Color, muted sty) {
 	x, y := cl.X, cl.Y
-	p.sessionBox(c, x+cl.SessionLeft, y, s, selected, showProfile, tone)
+	p.sessionBox(c, x+cl.SessionLeft, y, s, cl.SessionStep, cl.SessionBox, selected, showProfile, tone)
 	if cl.Stem != nil {
 		c.text(x+cl.Stem.Left, y+cl.Stem.Y, seg{cl.Stem.Text, muted})
 	}

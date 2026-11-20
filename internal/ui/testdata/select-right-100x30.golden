@@ -2,13 +2,9 @@
 ✳ claude-x   5h —                      7d —                                         ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-              ╭─ ✳ Alpha task ───────────── ⠋ ─╮    ┏━ ✳ Bravo task ━━━━━━━━━━━━━━━━━┓
-              │             claude             │    ┃            claude-x            ┃
-              │ Opus 4.7                       │    ┃ mystery-model          sdk-cli ┃
-              │ ctx █████░░░░░  45%  90k/200k  │    ┃ ctx ███░░░░░░░ ~25%  50k/~200k ┃
-              │ agents  1 active · 2 total     │    ┃ agents  none                   ┃
-              │ no PRs                         │    ┃ no PRs                         ┃
-              │ ● busy · 5s ago                │    ┃ ● idle · 2m ago                ┃
+              ╭─ ✳ Alpha task ───── ⠋ busy 5s ─╮    ┏━ ✳ Bravo task ━━━━━ ● idle 2m ━┓
+              │ claude · Opus 4.7 · 45%        │    ┃ claude-x · mys… · ~25% sdk-cli ┃
+              │ 1/2 agents                     │    ┃ no agents                      ┃
               ╰────────────────────────────────╯    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
                                │
                                │
@@ -18,12 +14,16 @@
                   │ faz algo               │
                   ╰────────────────────────╯
 
-              ╭─ ✳ Charlie task ───────────────╮    ╭─ ✳ Delta task ─────────────────╮
-              │             claude             │    │             claude             │
-              │ unknown model                  │    │ unknown model                  │
-              │ ctx ░░░░░░░░░░   0%  0/200k    │    │ ctx ░░░░░░░░░░   0%  0/200k    │
-              │ agents  none                   │    │ agents  none                   │
-              │ no PRs                         │    │ no PRs                         │
-↓ more below
+              ╭─ ✳ Charlie task ─ ● ended 12s ─╮    ╭─ ✳ Delta task ───── ● idle 5s ─╮
+              │ claude · unknown model · 0%    │    │ claude · unknown model · 0%    │
+              │ no agents                      │    │ no agents                      │
+              ╰────────────────────────────────╯    ╰────────────────────────────────╯
+
+                                 ╭─ ✳ Echo task ────── ● idle 5s ─╮
+                                 │ claude · unknown model · 0%    │
+                                 │ no agents                      │
+                                 ╰────────────────────────────────╯
+
+
 ────────────────────────────────────────────────────────────────────────────────────────────────────
  agtop  │ 5 sessions ● 1 busy │ ⚙ 1 agent │ ✗ 0 errors             ↵ open  p profile  ? help  q quit

@@ -2,13 +2,11 @@
 ✳ claude-x   5h —      7d —
 ────────────────────────────────────────
 
-   ╭─ ✳ Detail task ──────────── ⠋ ─╮
-   │             claude             │
-   │ Opus 4.7 · high                │
-   │ ctx ██████░░░░  60%  120k/200k │
-   │ agents  2 active · 6 total     │
-   │ no PRs                         │
-   │ ● busy · 5s ago                │
+
+
+   ╭─ ✳ Detail task ──── ⠋ busy 5s ─╮
+   │ claude · Opus 4… · high · 60%  │
+   │ 2/6 agents                     │
    ╰────────────────────────────────╯
                     │
      ┌──────────────┤
@@ -23,6 +21,8 @@
        │ ⠋ ◌ starting           │
        │ trabalha no fundo      │
        ╰────────────────────────╯
+
+
 
 ────────────────────────────────────────
  agtop  │ 1 session │ ✗ 0 errors

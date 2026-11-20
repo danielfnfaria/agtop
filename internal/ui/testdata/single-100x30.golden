@@ -1,12 +1,12 @@
 ✳ claude   5h —                      7d —                    (run: agtop setup)   ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-              ╭─ ✳ Alpha task ───────────── ⠋ ─╮    ╭─ ✳ Charlie task ───────────────╮
-              │ Opus 4.7                       │    │ unknown model                  │
-              │ ctx █████░░░░░  45%  90k/200k  │    │ ctx ░░░░░░░░░░   0%  0/200k    │
-              │ agents  1 active · 2 total     │    │ agents  none                   │
-              │ no PRs                         │    │ no PRs                         │
-              │ ● busy · 5s ago                │    │ ● ended 12s ago                │
+
+
+
+              ╭─ ✳ Alpha task ───── ⠋ busy 5s ─╮    ╭─ ✳ Charlie task ─ ● ended 12s ─╮
+              │ Opus 4.7 · 45%                 │    │ unknown model · 0%             │
+              │ 1/2 agents                     │    │ no agents                      │
               ╰────────────────────────────────╯    ╰────────────────────────────────╯
                                │
                                │
@@ -16,13 +16,13 @@
                   │ faz algo               │
                   ╰────────────────────────╯
 
-              ╭─ ✳ Delta task ─────────────────╮    ╭─ ✳ Echo task ──────────────────╮
-              │ unknown model                  │    │ unknown model                  │
-              │ ctx ░░░░░░░░░░   0%  0/200k    │    │ ctx ░░░░░░░░░░   0%  0/200k    │
-              │ agents  none                   │    │ agents  none                   │
-              │ no PRs                         │    │ no PRs                         │
-              │ ● idle · 5s ago                │    │ ● idle · 5s ago                │
+              ╭─ ✳ Delta task ───── ● idle 5s ─╮    ╭─ ✳ Echo task ────── ● idle 5s ─╮
+              │ unknown model · 0%             │    │ unknown model · 0%             │
+              │ no agents                      │    │ no agents                      │
               ╰────────────────────────────────╯    ╰────────────────────────────────╯
+
+
+
 
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────

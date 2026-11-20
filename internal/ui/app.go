@@ -465,8 +465,13 @@ func (a *App) bodyGeometry(sel treeSel) bodyGeom {
 	})
 	geo.top = a.topBar()
 	belowTop := geo.screenRows - model.StatusBarHeight(geo.status)
+	// The session boxes take a step of their own when the tree runs out of rows (see
+	// model.SessionStep), so the bar is measured against the box the layout would really draw:
+	// the smallest one, which is what a body this short ends up with. Measuring the full box here
+	// hid the bar while the boxes still had room to shrink.
 	geo.showTop = a.snap != nil && a.appearance.Layout.TopBar &&
-		belowTop-model.TopBarHeight(geo.top) >= model.SessionBoxHeight(sel.multiProfile)+treeIndicatorRows
+		belowTop-model.TopBarHeight(geo.top) >=
+			model.SmallestSessionStep.Size(sel.multiProfile).Height+treeIndicatorRows
 	topRows := 0
 	if geo.showTop {
 		topRows = model.TopBarHeight(geo.top)

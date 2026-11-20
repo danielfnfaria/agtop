@@ -191,31 +191,36 @@ func TestFitBadges(t *testing.T) {
 func TestTitleBar(t *testing.T) {
 	titles := []string{"short", strings.Repeat("x", 80), strings.Repeat(kanji, 20)}
 	for _, lead := range []int{0, 2} {
-		for _, spinner := range []bool{false, true} {
+		for _, right := range []int{0, 1, 9} {
 			for _, title := range titles {
-				fitted, fill := TitleBar(title, 34, spinner, lead, ellipsis)
-				// corner + line + space | lead | title | space + fill | spinner slot | corner
-				total := 3 + lead + ansi.StringWidth(fitted) + 1 + fill + 1
-				if spinner {
-					total += TitleSpinnerColumns
-				}
+				fitted, fill := TitleBar(title, 34, lead, right, ellipsis)
+				// corner + line + space | lead | title | space + fill | right block | corner
+				total := 3 + lead + ansi.StringWidth(fitted) + 1 + fill + TitleRightColumns(right) + 1
 				if total != 34 || fill < 1 {
-					t.Errorf("lead=%d spinner=%v title=%q: total %d fill %d", lead, spinner, title, total, fill)
+					t.Errorf("lead=%d right=%d title=%q: total %d fill %d", lead, right, title, total, fill)
 				}
 			}
 		}
 	}
-	if got, _ := TitleBar("short", 34, false, 0, ellipsis); got != "short" {
+	if got := TitleRightColumns(0); got != 0 {
+		t.Errorf("no right block takes %d columns", got)
+	}
+	if got, _ := TitleBar("short", 34, 0, 0, ellipsis); got != "short" {
 		t.Errorf("short title = %q", got)
 	}
-	if got, _ := TitleBar(strings.Repeat("x", 80), 34, true, 0, ellipsis); !strings.HasSuffix(got, ellipsis) {
+	if got, _ := TitleBar(strings.Repeat("x", 80), 34, 0, 1, ellipsis); !strings.HasSuffix(got, ellipsis) {
 		t.Errorf("long title = %q", got)
 	}
 	long := strings.Repeat("x", 80)
-	with, _ := TitleBar(long, 34, false, 2, ellipsis)
-	without, _ := TitleBar(long, 34, false, 0, ellipsis)
+	with, _ := TitleBar(long, 34, 2, 0, ellipsis)
+	without, _ := TitleBar(long, 34, 0, 0, ellipsis)
 	if ansi.StringWidth(with) != ansi.StringWidth(without)-2 {
 		t.Errorf("lead should come out of the title: %d vs %d", ansi.StringWidth(with), ansi.StringWidth(without))
+	}
+	// The right block comes out of the title too.
+	state, _ := TitleBar(long, 34, 2, 9, ellipsis)
+	if ansi.StringWidth(state) != ansi.StringWidth(with)-TitleRightColumns(9) {
+		t.Errorf("state block = %d vs %d", ansi.StringWidth(state), ansi.StringWidth(with))
 	}
 }
 

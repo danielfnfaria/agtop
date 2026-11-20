@@ -9,14 +9,14 @@
 
 
 
-                                 ╭─ ✳ Bravo task ─────────────────╮
-                                 │            claude-x            │
-                                 │ mystery-model          sdk-cli │
-                                 │ ctx ███░░░░░░░ ~25%  50k/~200k │
-                                 │ agents  none                   │
-                                 │ no PRs                         │
-                                 │ ● idle · 2m ago                │
+
+
+                                 ╭─ ✳ Bravo task ───── ● idle 2m ─╮
+                                 │ claude-x · mys… · ~25% sdk-cli │
+                                 │ no agents                      │
                                  ╰────────────────────────────────╯
+
+
 
 
 

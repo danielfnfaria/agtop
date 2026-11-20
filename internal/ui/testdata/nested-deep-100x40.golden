@@ -4,13 +4,11 @@
 
 
 
-                                 ╭─ ✳ Nested task ──────────── ⠋ ─╮
-                                 │             claude             │
-                                 │ Opus 4.7                       │
-                                 │ ctx ████░░░░░░  40%  80k/200k  │
-                                 │ agents  5 active · 5 total     │
-                                 │ no PRs                         │
-                                 │ ● busy · 5s ago                │
+
+
+                                 ╭─ ✳ Nested task ──── ⠋ busy 5s ─╮
+                                 │ claude · Opus 4.7 · 40%        │
+                                 │ 5/5 agents                     │
                                  ╰────────────────────────────────╯
                                                   │
                                     ┌─────────────┴───────────────────────────┐
@@ -31,6 +29,8 @@
          │ ⠋ … thinking           │
          │ looks something up     │
          ╰────────────────────────╯
+
+
 
 
 

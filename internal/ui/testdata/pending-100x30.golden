@@ -9,14 +9,14 @@
 
 
 
-              ╭─ ✳ Bg task ────────────────────╮    ╭─ ✳ Idle task ──────────────────╮
-              │             claude             │    │             claude             │
-              │ unknown model       background │    │ unknown model                  │
-              │ ctx ░░░░░░░░░░   0%  0/200k    │    │ ctx ░░░░░░░░░░   0%  0/200k    │
-              │ agents  none                   │    │ agents  none                   │
-              │ no PRs                         │    │ no PRs                         │
-              │ ● bg · not started             │    │ ● idle · 5s ago                │
+
+
+              ╭─ ✳ Bg task ───────────── ● bg ─╮    ╭─ ✳ Idle task ────── ● idle 5s ─╮
+              │ claude · unkn… · 0% background │    │ claude · unknown model · 0%    │
+              │ no agents                      │    │ no agents                      │
               ╰────────────────────────────────╯    ╰────────────────────────────────╯
+
+
 
 
 
