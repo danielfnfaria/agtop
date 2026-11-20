@@ -83,7 +83,10 @@ Node warnings, stderr) are held, counted in the status bar, and written to
 stderr after quitting. Suspending (SIGTSTP) gives the terminal back; on
 continue (fg), the screen is redrawn.
 
-Each session shows as a box with its active agents hanging below it.
+Each session shows as a box, with its agents below it as a nested tree: an
+agent spawned by another agent sits under its parent, at any depth. Box
+sizes follow both the terminal width and its height, shrinking while that
+fits more agents on screen; a session with no active agent shrinks first.
 
 Plan usage (top bar): one line per profile with the 5-hour and 7-day usage
 limits, their reset times and the profile's activity over the last hour.
