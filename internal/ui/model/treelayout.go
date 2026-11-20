@@ -552,8 +552,9 @@ func NewClusterLayout(s TreeSession, maxWidth, boxHeight int, plan StepPlan, lin
 // rows the body gives the tree (UnlimitedRows for no limit): each session first takes the step
 // its width allows (see PickStepPlan) and, when the content is taller than the body, every
 // session drops a step together until the whole thing fits, since the height belongs to the set
-// of clusters and not to any one of them. When not even the smallest boxes fit, the content
-// keeps the boxes of the width and scrolls (see Viewport).
+// of clusters and not to any one of them. When not even the smallest boxes fit, the step is the
+// one that shows the most agent boxes whole in the body (see visibleAgents), the largest boxes
+// winning a tie, and the rest scrolls (see Viewport).
 func NewTreeLayout(sessions []TreeSession, columns, bodyRows, boxHeight int, line style.Lines) TreeLayout {
 	cols := max(1, columns)
 	plans := make([]StepPlan, len(sessions))
@@ -564,15 +565,39 @@ func NewTreeLayout(sessions []TreeSession, columns, bodyRows, boxHeight int, lin
 	if bodyRows < 0 || layout.ContentHeight <= bodyRows {
 		return layout
 	}
+	// Not even the boxes of the width fit: the session boxes have a fixed height, so enough
+	// sessions overflow the body on their own. The step is then the one that reads the most
+	// agents, the largest boxes winning a tie, and the rest scrolls.
+	best, most := layout, visibleAgents(layout, bodyRows)
 	for demoteAll(plans) {
-		if smaller := placeClusters(sessions, plans, cols, boxHeight, line); smaller.ContentHeight <= bodyRows {
+		smaller := placeClusters(sessions, plans, cols, boxHeight, line)
+		if smaller.ContentHeight <= bodyRows {
 			return smaller
 		}
+		if n := visibleAgents(smaller, bodyRows); n > most {
+			best, most = smaller, n
+		}
 	}
-	// Not even the smallest boxes fit: the session boxes have a fixed height, so enough sessions
-	// overflow the body on their own. Shrinking the agents buys nothing then, and the largest
-	// boxes read better, so the tree keeps them and the rest scrolls.
-	return layout
+	return best
+}
+
+// visibleAgents is how many agent boxes of the layout stand whole, top and bottom border
+// included, in the first bodyRows rows of the content. It is the measure of a layout the body
+// cuts: shrinking the boxes is worth it only when it brings more agents into those rows. The
+// count takes the top of the content, never the window of a viewport, so the step does not
+// depend on the scroll or on which session is selected.
+func visibleAgents(l TreeLayout, bodyRows int) int {
+	count := 0
+	for _, row := range l.Rows {
+		for _, c := range row.Clusters {
+			for _, a := range c.Agents {
+				if c.Y+a.Y+a.Size().Height <= bodyRows {
+					count++
+				}
+			}
+		}
+	}
+	return count
 }
 
 // demoteAll drops every level of every plan one step; it reports whether any of them moved, so a
