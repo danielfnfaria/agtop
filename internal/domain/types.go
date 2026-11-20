@@ -91,6 +91,8 @@ type AgentState struct {
 	// notification status.
 	FailureReason string `json:"failureReason,omitempty"`
 	SpawnDepth    *int   `json:"spawnDepth,omitempty"`
+	// ParentAgentID is the agentId of the agent that launched this one; empty at the first level.
+	ParentAgentID string `json:"parentAgentId,omitempty"`
 	StartedAt     int64  `json:"startedAt,omitempty"`
 	FinishedAt    int64  `json:"finishedAt,omitempty"`
 	// HandbackReceivedAt is the epoch ms of the latest peer handback the parent session received
@@ -335,8 +337,10 @@ type AgentMeta struct {
 	AgentType   string `json:"agentType,omitempty"`
 	Description string `json:"description,omitempty"`
 	ToolUseID   string `json:"toolUseId,omitempty"`
-	SpawnDepth  *int   `json:"spawnDepth,omitempty"`
-	Model       string `json:"model,omitempty"`
+	// ParentAgentID is the agentId of the agent that launched this one; empty at the first level.
+	ParentAgentID string `json:"parentAgentId,omitempty"`
+	SpawnDepth    *int   `json:"spawnDepth,omitempty"`
+	Model         string `json:"model,omitempty"`
 	// StoppedByUser is only true when stoppedByUser === true in the meta.json.
 	StoppedByUser bool `json:"stoppedByUser,omitempty"`
 }

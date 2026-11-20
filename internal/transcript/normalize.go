@@ -539,6 +539,9 @@ func ParseAgentMeta(value any) (domain.AgentMeta, bool) {
 	if v, ok := getNonEmptyString(rec, "toolUseId"); ok {
 		meta.ToolUseID = domain.Sanitize(v, idMax)
 	}
+	if v, ok := getNonEmptyString(rec, "parentAgentId"); ok {
+		meta.ParentAgentID = domain.Sanitize(v, idMax)
+	}
 	if n, ok := getNumber(rec, "spawnDepth"); ok {
 		depth := domain.SafeNonNegInt(n)
 		meta.SpawnDepth = &depth

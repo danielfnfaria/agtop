@@ -196,6 +196,24 @@ func TestProjector(t *testing.T) {
 		}
 	})
 
+	t.Run("carries the agent identity and its parent", func(t *testing.T) {
+		p := projector{newContextLearner(nil)}
+		child := reduce.NewAgentState()
+		child.AgentID, child.ParentAgentID = "a2", "a1"
+		parent := reduce.NewAgentState()
+		parent.AgentID = "a1"
+		e := withState(testEntry("s-tree", 0, profile1, nil), func(s *domain.SessionState) {
+			s.Agents = map[string]domain.AgentState{"a1": parent, "a2": child}
+		})
+		v := p.project(e)
+		if got := v.Agents["a1"]; got.AgentID != "a1" || got.ParentAgentID != "" {
+			t.Errorf("a1 = %+v", got)
+		}
+		if got := v.Agents["a2"]; got.AgentID != "a2" || got.ParentAgentID != "a1" {
+			t.Errorf("a2 = %+v", got)
+		}
+	})
+
 	t.Run("exposes transcript existence", func(t *testing.T) {
 		p := projector{newContextLearner(nil)}
 		with := testEntry("s", 0, profile1, func(d *discovery.DiscoveredSession) { d.Files.TranscriptPath = "/x.jsonl" })

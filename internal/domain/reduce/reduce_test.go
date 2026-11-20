@@ -403,6 +403,42 @@ func TestApplyAgentMeta(t *testing.T) {
 		expectEqual(t, key, "a1")
 		expectEqual(t, ok, true)
 	})
+	t.Run("the parent comes from the meta.json and may overwrite it", func(t *testing.T) {
+		s := ApplyAgentMeta(NewSessionState("s"), "a2", domain.AgentMeta{ParentAgentID: "a1", SpawnDepth: ptr(2)})
+		expectMatch(t, agentOf(t, s, "a2"), obj{"parentAgentId": "a1", "spawnDepth": 2})
+		s = ApplyAgentMeta(s, "a2", domain.AgentMeta{ParentAgentID: "a9"})
+		expectEqual(t, agentOf(t, s, "a2").ParentAgentID, "a9")
+		// A meta.json without the field keeps what is there.
+		s = ApplyAgentMeta(s, "a2", domain.AgentMeta{})
+		expectEqual(t, agentOf(t, s, "a2").ParentAgentID, "a9")
+	})
+	t.Run("the parent survives the launch in either read order", func(t *testing.T) {
+		launch := domain.AssistantMessageEvent{EventBase: at(t0), ToolUses: []domain.ToolUseInfo{
+			{ID: "toolu_1", Name: "Agent", AgentLaunch: &domain.AgentLaunchRequest{Type: "executor", Description: "Do"}}}}
+		meta := domain.AgentMeta{AgentType: "executor", ToolUseID: "toolu_1", ParentAgentID: "a1"}
+		metaFirst := Session(ApplyAgentMeta(NewSessionState("s"), "a2", meta), launch)
+		expectEqual(t, agentOf(t, metaFirst, "a2").ParentAgentID, "a1")
+		launchFirst := ApplyAgentMeta(Session(NewSessionState("s"), launch), "a2", meta)
+		expectEqual(t, agentOf(t, launchFirst, "a2").ParentAgentID, "a1")
+	})
+}
+
+func TestMergeAgentsParent(t *testing.T) {
+	withParent := domain.AgentState{ActivityState: emptyActivity(), AgentID: "a2", ParentAgentID: "a1"}
+	plain := domain.AgentState{ActivityState: emptyActivity(), AgentID: "a2"}
+	expectEqual(t, mergeAgents(plain, withParent).ParentAgentID, "a1")
+	expectEqual(t, mergeAgents(withParent, plain).ParentAgentID, "a1")
+	expectEqual(t, mergeAgents(plain, plain).ParentAgentID, "")
+}
+
+func TestResumeAgentKeepsParent(t *testing.T) {
+	prior := domain.AgentState{ActivityState: emptyActivity(), AgentID: "a2", ToolUseID: "toolu_old",
+		Type: "executor", ParentAgentID: "a1", Status: domain.StatusHandedBack, FinishedAt: t0}
+	session := replaceAgent(NewSessionState("s"), prior)
+	launched := domain.AgentState{ActivityState: emptyActivity(), AgentID: "a2", Type: "executor"}
+	resumed, ok := resumeAgent(session, launched, "toolu_new")
+	expectEqual(t, ok, true)
+	expectMatch(t, agentOf(t, resumed, "a2"), obj{"parentAgentId": "a1", "toolUseId": "toolu_new", "status": "launched"})
 }
 
 func TestSessionActivityHistogram(t *testing.T) {

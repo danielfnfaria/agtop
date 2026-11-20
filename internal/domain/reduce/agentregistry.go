@@ -88,6 +88,7 @@ func mergeAgents(launch, other domain.AgentState) domain.AgentState {
 		Status:             side.Status,
 		FailureReason:      side.FailureReason,
 		SpawnDepth:         other.SpawnDepth,
+		ParentAgentID:      other.ParentAgentID,
 		StartedAt:          minDefined(launch.StartedAt, other.StartedAt),
 		FinishedAt:         side.FinishedAt,
 		HandbackReceivedAt: maxDefined(launch.HandbackReceivedAt, other.HandbackReceivedAt),
@@ -109,6 +110,9 @@ func mergeAgents(launch, other domain.AgentState) domain.AgentState {
 	}
 	if merged.SpawnDepth == nil {
 		merged.SpawnDepth = launch.SpawnDepth
+	}
+	if merged.ParentAgentID == "" {
+		merged.ParentAgentID = launch.ParentAgentID
 	}
 	return merged
 }

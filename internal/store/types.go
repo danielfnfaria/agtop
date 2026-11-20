@@ -67,6 +67,10 @@ type AgentContext struct {
 
 // AgentView is an agent as the UI shows it.
 type AgentView struct {
+	// AgentID is the agentId of the agent, empty while only its launch was seen.
+	AgentID string
+	// ParentAgentID is the agentId of the agent that launched this one; empty at the first level.
+	ParentAgentID string
 	// Type is subagent_type / agentType; "unknown" until seen.
 	Type         string
 	Description  string
@@ -127,7 +131,8 @@ type SessionView struct {
 	LastActivityAt int64
 	// PRs are the PR links seen in the session and its agents, oldest first.
 	PRs []domain.PullRequestRef
-	// Agents by key: agentId when known, else the toolUseId of the launch.
+	// Agents by key: agentId when known, else the toolUseId of the launch. Never a nil value: a
+	// key that is present always carries a view (see agentView).
 	Agents map[string]*AgentView
 	// ParseErrors are transcript lines that were not valid JSON objects.
 	ParseErrors int

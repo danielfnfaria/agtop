@@ -183,6 +183,10 @@ func ApplyAgentMeta(session domain.SessionState, agentID string, meta domain.Age
 		depth := *meta.SpawnDepth
 		agent.SpawnDepth = &depth
 	}
+	// The meta.json is the only source of the parent: it may overwrite what is there.
+	if meta.ParentAgentID != "" {
+		agent.ParentAgentID = meta.ParentAgentID
+	}
 	// The meta.json has no time: finishedAt only if there is one already.
 	if meta.StoppedByUser {
 		agent = finishAgent(agent, domain.StatusFailed, 0, "stopped")

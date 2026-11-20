@@ -137,6 +137,41 @@ func sessionWithAgents() *store.SessionView {
 	})
 }
 
+// nestedAgents is a session where a coordinator launched its own agents: two executors, one of
+// which launched a third level when deep. Every agent is active, so the tree shows them all.
+func nestedAgents(deep bool) *store.SessionView {
+	return session("claude:nest", func(s *store.SessionView) {
+		s.DisplayTitle, s.Cwd, s.ProjectName, s.GitBranch = "Nested task", "/home/u/projects/nest", "nest", "main"
+		s.Version, s.PID, s.Activity = "2.1.0", 888, discovery.ActivityBusy
+		s.Model = &domain.ModelInfo{ID: "claude-opus-4-7", Name: "Opus 4.7"}
+		s.ContextUsed, s.ContextPercent = 80_000, 40
+		s.Agents = map[string]*store.AgentView{
+			"a-coord": agent(func(a *store.AgentView) {
+				a.AgentID, a.Type, a.Description = "ag-coord", "coordinator", "splits the work"
+				a.Model, a.StartedAt = "claude-opus-4-7", now-60_000
+			}),
+			"a-exec1": agent(func(a *store.AgentView) {
+				a.AgentID, a.ParentAgentID = "ag-exec1", "ag-coord"
+				a.Type, a.Description, a.StartedAt = "executor", "writes the code", now-50_000
+			}),
+			"a-exec2": agent(func(a *store.AgentView) {
+				a.AgentID, a.ParentAgentID = "ag-exec2", "ag-coord"
+				a.Type, a.Description, a.Status = "reviewer", "reviews the diff", domain.StatusLaunched
+				a.StartedAt = now - 40_000
+			}),
+			"a-solo": agent(func(a *store.AgentView) {
+				a.AgentID, a.Type, a.Description, a.StartedAt = "ag-solo", "general", "answers a question", now-20_000
+			}),
+		}
+		if deep {
+			s.Agents["a-leaf"] = agent(func(a *store.AgentView) {
+				a.AgentID, a.ParentAgentID = "ag-leaf", "ag-exec1"
+				a.Type, a.Description, a.StartedAt = "explorer", "looks something up", now-30_000
+			})
+		}
+	})
+}
+
 // fakeStore is an in-memory Source; set swaps the snapshot and signals.
 type fakeStore struct {
 	mu      sync.Mutex
