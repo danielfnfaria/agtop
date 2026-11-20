@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0](https://github.com/danielfnfaria/agtop/compare/v0.2.1...v0.3.0) (2026-11-20)
+
+
+### Features
+
+* compact session boxes that shrink with the terminal ([#29](https://github.com/danielfnfaria/agtop/issues/29)) ([2c77d67](https://github.com/danielfnfaria/agtop/commit/2c77d678581f7df69fc72750ffb9414f7b35ed87))
+* publish deb and rpm packages with each release ([#19](https://github.com/danielfnfaria/agtop/issues/19)) ([5c639fd](https://github.com/danielfnfaria/agtop/commit/5c639fdf83b5240be102d41a6a5d63c7a8b5926b))
+* show sub-agents as a nested tree ([#26](https://github.com/danielfnfaria/agtop/issues/26)) ([983098c](https://github.com/danielfnfaria/agtop/commit/983098c29758138f5e540038dc99929f512025ca))
+
+
+### Bug Fixes
+
+* keep shrinking the boxes when the tree does not fit the screen ([#28](https://github.com/danielfnfaria/agtop/issues/28)) ([f02074f](https://github.com/danielfnfaria/agtop/commit/f02074f45303c6e65fffa307fce24ef1cf096540))
+
 ## [0.2.1](https://github.com/danielfnfaria/agtop/compare/v0.2.0...v0.2.1) (2026-10-19)
 
 
