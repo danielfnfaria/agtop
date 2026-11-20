@@ -38,27 +38,43 @@ func simLevels(levels ...int) []simNode {
 }
 
 type simScenario struct {
-	name  string
-	roots []simNode
+	name string
+	// forests is the active agents of each session of the scenario, in order.
+	forests [][]simNode
+	// sizes are the terminals to render, simSizes when empty.
+	sizes []simSize
 }
+
+// one is a scenario of a single session with the given agents.
+func one(roots []simNode) [][]simNode { return [][]simNode{roots} }
 
 func simScenarios() []simScenario {
 	return []simScenario{
-		{"flat-3", simLevels(3)},
-		{"flat-6", simLevels(6)},
-		{"flat-10", simLevels(10)},
-		{"flat-20", simLevels(20)},
-		{"nested-2x3", simLevels(2, 3)},
-		{"nested-3x4", simLevels(3, 4)},
-		{"deep-3", simLevels(2, 3, 2)},
-		{"fan-8", simLevels(1, 8)},
-		{"mixed", append(simLevels(1, 5), simLevels(3)...)},
+		{name: "flat-3", forests: one(simLevels(3))},
+		{name: "flat-6", forests: one(simLevels(6))},
+		{name: "flat-10", forests: one(simLevels(10))},
+		{name: "flat-20", forests: one(simLevels(20))},
+		{name: "nested-2x3", forests: one(simLevels(2, 3))},
+		{name: "nested-3x4", forests: one(simLevels(3, 4))},
+		{name: "deep-3", forests: one(simLevels(2, 3, 2))},
+		{name: "fan-8", forests: one(simLevels(1, 8))},
+		{name: "mixed", forests: one(append(simLevels(1, 5), simLevels(3)...))},
+		// dense is the screen that showed the tree had to shrink to the body: two sessions, one
+		// of them idle, and ten active agents nested two levels deep in the other.
+		{
+			name:    "dense",
+			forests: [][]simNode{nil, simLevels(3, 3)},
+			sizes:   []simSize{{90, 30}, {100, 30}, {120, 35}, {160, 45}},
+		},
 	}
 }
 
+// simSize is a terminal to render.
+type simSize struct{ w, h int }
+
 // simSizes are real terminal sizes, height included: the tree shrinks to the body as well as to
 // the width (see model.NewTreeLayout), so a tall screen and a short one are different art.
-var simSizes = []struct{ w, h int }{{80, 24}, {100, 30}, {120, 30}, {120, 40}, {160, 40}, {200, 50}}
+var simSizes = []simSize{{80, 24}, {100, 30}, {120, 30}, {120, 40}, {160, 40}, {200, 50}}
 
 var (
 	simKinds  = []string{"coordinator", "executor", "reviewer", "explorer", "general-purpose", "planner"}
@@ -76,14 +92,14 @@ func simSession(roots []simNode) *store.SessionView {
 		s.ContextUsed, s.ContextPercent = 80_000, 40
 		s.Agents = map[string]*store.AgentView{}
 	})
-	n := 0
+	seen := 0
 	var add func(nodes []simNode, parentID string, depth int)
 	add = func(nodes []simNode, parentID string, depth int) {
 		for i, node := range nodes {
-			n++
-			id := fmt.Sprintf("ag-%d", n)
-			key := "k-" + strconv.Itoa(n)
-			seq := n
+			seen++
+			id := fmt.Sprintf("ag-%d", seen)
+			key := "k-" + strconv.Itoa(seen)
+			seq := seen
 			s.Agents[key] = agent(func(a *store.AgentView) {
 				a.AgentID, a.ParentAgentID = id, parentID
 				a.Type = simKinds[(depth+i)%len(simKinds)]
@@ -104,6 +120,22 @@ func simSession(roots []simNode) *store.SessionView {
 	return s
 }
 
+// simSessions is the sessions of a scenario: with more than one they take a key and a title of
+// their own, so the view tells them apart.
+func simSessions(forests [][]simNode) []*store.SessionView {
+	out := make([]*store.SessionView, len(forests))
+	for i, roots := range forests {
+		s := simSession(roots)
+		if len(forests) > 1 {
+			s.Key = fmt.Sprintf("%s-%d", s.Key, i+1)
+			s.SessionID = s.Key
+			s.DisplayTitle = fmt.Sprintf("%s %d", s.DisplayTitle, i+1)
+		}
+		out[i] = s
+	}
+	return out
+}
+
 func TestSimulation(t *testing.T) {
 	dir := os.Getenv("AGTOP_SIM_DIR")
 	if dir == "" {
@@ -114,10 +146,14 @@ func TestSimulation(t *testing.T) {
 	}
 	single := []config.ProfileDir{profiles[0]}
 	for _, sc := range simScenarios() {
-		for _, size := range simSizes {
+		sizes := sc.sizes
+		if len(sizes) == 0 {
+			sizes = simSizes
+		}
+		for _, size := range sizes {
 			name := fmt.Sprintf("%s-%dx%d", sc.name, size.w, size.h)
 			t.Run(name, func(t *testing.T) {
-				snap := snapshot([]*store.SessionView{simSession(sc.roots)}, single)
+				snap := snapshot(simSessions(sc.forests), single)
 				a := newApp(testOptions(newFakeStore(snap), single), size.w, size.h)
 				out := screen(a) + "\n"
 				if err := os.WriteFile(filepath.Join(dir, name+".txt"), []byte(out), 0o644); err != nil {

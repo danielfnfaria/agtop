@@ -554,15 +554,44 @@ func TestTreeLayoutFitsTheHeight(t *testing.T) {
 		}
 	})
 
-	t.Run("not even the smallest step fits: the boxes of the width, with the scroll", func(t *testing.T) {
+	t.Run("not even the smallest step fits: shrinking reads more agents, so it shrinks", func(t *testing.T) {
+		// The chain in a body of 20 rows: no step fits, and the smaller boxes bring one more
+		// agent whole into the body, so the tree takes them and the rest scrolls.
+		counts := stepCounts(deep, 140, 20)
 		l := layout(20)
-		c := l.Rows[0].Clusters[0]
-		if steps := clusterSteps(t, c); steps.At(0) != StepFull || l.ContentHeight != 32 {
-			t.Errorf("steps %v height %d", steps, l.ContentHeight)
+		got := wholeBoxes(l, 20)
+		if got != slices.Max(counts) || got <= counts[StepFull] {
+			t.Errorf("whole boxes %d, by step %v", got, counts)
 		}
+		if l.ContentHeight <= 20 {
+			t.Errorf("content height %d", l.ContentHeight)
+		}
+		checkSteps(t, l.Rows[0].Clusters[0])
 		if vp := l.Viewport(20, "s", 0); !vp.Scrolling || !vp.Below {
 			t.Errorf("viewport = %+v", vp)
 		}
+	})
+
+	t.Run("not even the smallest step fits: shrinking reads no more, so the boxes stay", func(t *testing.T) {
+		// Five sessions with one agent each in 100 columns: two clusters per row, three rows of
+		// them and more content than the body however small the agents get. The session boxes
+		// have a fixed height, so shrinking brings no further agent into the body and the full
+		// boxes, which read better, stay.
+		five := sessions(5, 1)
+		counts := stepCounts(five, 100, 30)
+		l := NewTreeLayout(five, 100, 30, SessionHeight, line)
+		got := wholeBoxes(l, 30)
+		if got != slices.Max(counts) || got != counts[StepFull] {
+			t.Errorf("whole boxes %d, by step %v", got, counts)
+		}
+		if l.ContentHeight <= 30 {
+			t.Errorf("content height %d", l.ContentHeight)
+		}
+		c := l.Rows[0].Clusters[0]
+		if steps := clusterSteps(t, c); steps.At(0) != StepFull {
+			t.Errorf("steps %v", steps)
+		}
+		checkSteps(t, c)
 	})
 
 	t.Run("enough session boxes overflow on their own and still scroll", func(t *testing.T) {
@@ -636,6 +665,36 @@ func TestSessionBoxHeight(t *testing.T) {
 // nestedAgent is an agent with the given children.
 func nestedAgent(key string, children ...TreeAgent) TreeAgent {
 	return TreeAgent{Key: key, Children: children}
+}
+
+// wholeBoxes counts the agent boxes of the layout that stand whole, borders included, in the
+// first rows rows of the content: the measure the tree maximizes when no step fits the body.
+func wholeBoxes(l TreeLayout, rows int) int {
+	count := 0
+	for _, row := range l.Rows {
+		for _, c := range row.Clusters {
+			for _, a := range c.Agents {
+				if c.Y+a.Y >= 0 && c.Y+a.Y+a.Size().Height <= rows {
+					count++
+				}
+			}
+		}
+	}
+	return count
+}
+
+// stepCounts is how many agent boxes stand whole in rows rows of body with every level of every
+// session forced to each step, from the full box to the smallest one.
+func stepCounts(s []TreeSession, columns, rows int) []int {
+	counts := make([]int, SmallestStep+1)
+	for step := StepFull; step <= SmallestStep; step++ {
+		plans := make([]StepPlan, len(s))
+		for i := range plans {
+			plans[i] = StepPlan{step}
+		}
+		counts[step] = wholeBoxes(placeClusters(s, plans, columns, SessionHeight, line), rows)
+	}
+	return counts
 }
 
 // chain is a line of descent key0 -> key1 -> ... of the given length.
