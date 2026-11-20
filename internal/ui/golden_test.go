@@ -61,6 +61,23 @@ func pendingStore() Options {
 	return testOptions(newFakeStore(snapshot(sessions, profiles)), profiles)
 }
 
+func nestedStore() Options {
+	return testOptions(newFakeStore(snapshot([]*store.SessionView{nestedAgents(false)}, profiles)), profiles)
+}
+
+func deepStore() Options {
+	return testOptions(newFakeStore(snapshot([]*store.SessionView{nestedAgents(true)}, profiles)), profiles)
+}
+
+// simStore is one session with a made-up forest of agents (see the simulator), to pin the art of
+// the steps and of the wrapping.
+func simStore(roots []simNode) func() Options {
+	return func() Options {
+		single := profiles[:1]
+		return testOptions(newFakeStore(snapshot([]*store.SessionView{simSession(roots)}, single)), single)
+	}
+}
+
 func withAppearance(o Options, c *style.AppearanceConfig) Options {
 	o.Appearance = style.ResolveAppearance(c)
 	return o
@@ -103,6 +120,13 @@ func scenarios() []scenario {
 		{name: "agents-tree-100x30", opts: detailStore, w: 100, h: 30},
 		{name: "agents-tree-40x30", opts: detailStore, w: 40, h: 30},
 		{name: "pending-100x30", opts: pendingStore, w: 100, h: 30},
+		{name: "nested-tree-100x30", opts: nestedStore, w: 100, h: 30},
+		{name: "nested-tree-40x30", opts: nestedStore, w: 40, h: 30},
+		{name: "nested-deep-100x40", opts: deepStore, w: 100, h: 40},
+		{name: "nested-detail-100x30", opts: deepStore, w: 100, h: 30, keys: []string{"right", "enter"}},
+		{name: "forest-3x4-120x50", opts: simStore(simLevels(3, 4)), w: 120, h: 50},
+		{name: "forest-fan8-100x50", opts: simStore(simLevels(1, 8)), w: 100, h: 50},
+		{name: "forest-flat20-100x50", opts: simStore(simLevels(20)), w: 100, h: 50},
 		{name: "color-tree-100x30", opts: func() Options {
 			o := fiveStore()
 			o.Style = StyleFull

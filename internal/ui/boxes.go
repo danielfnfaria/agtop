@@ -29,8 +29,6 @@ type painter struct {
 const (
 	// sessionContent is the columns inside a session box (border and padding off).
 	sessionContent = model.SessionWidth - 4
-	// agentContent is the columns inside an agent box.
-	agentContent = model.AgentWidth - 4
 	// durationReserve is the columns kept for the duration and the gap before it.
 	durationReserve = 7
 	// badgesShare is the least share of the model line the kind badge gets.
@@ -289,40 +287,111 @@ func (p painter) prLine(prs []domain.PullRequestRef, muted bool) []seg {
 	return out
 }
 
-// agentBox draws the compact box of an active agent at (x, y).
-func (p painter) agentBox(c *canvas, x, y int, a *store.AgentView) {
+// nestMark is the marker a nested sub-agent carries in the title of its box. Every level gets
+// the same one: in the tree the place of the box already tells how deep it sits (the flat list
+// of the detail is the one that needs the depth, see nestIndent). It goes inline, so the box
+// keeps its height.
+func nestMark(nested bool, g style.Glyphs) string {
+	if !nested {
+		return ""
+	}
+	return g.Line.UpRight + " "
+}
+
+// shortDuration is the duration of an agent in the shortest form (5s, 3m, 2h), for the steps
+// with no room for the exact one.
+func (p painter) shortDuration(a *store.AgentView) string {
+	switch {
+	case a.StartedAt == 0:
+		return p.g.Dash
+	case a.FinishedAt != 0:
+		return model.FmtAgo(a.FinishedAt - a.StartedAt)
+	}
+	return model.FmtAgo(p.now - a.StartedAt)
+}
+
+// agentTitle is the first line of an agent box: the nesting marker, the kind and, with the
+// model, `kind · opus`, in at most width columns.
+func (p painter) agentTitle(a *store.AgentView, nested bool, width int, withModel bool) []seg {
+	g := p.g
+	nest := nestMark(nested, g)
+	name := a.Type
+	if withModel {
+		if short := model.ShortModel(a.Model, g.Ellipsis); short != "" {
+			name = a.Type + " " + g.Middot + " " + short
+		}
+	}
+	name = fitOwn(model.Clip(name, model.MaxText, g.Ellipsis), width-ansi.StringWidth(nest), g.Ellipsis)
+	return []seg{fg(nest, p.t.Muted), {name, sty{bold: true}}}
+}
+
+// agentActivity is the activity line of an agent box: the spinner with the activity while it
+// runs, else its status. icon tells whether the activity icon fits.
+func (p painter) agentActivity(a *store.AgentView, width int, color style.Color, icon bool) []seg {
+	g := p.g
+	if !domain.IsActive(a.Status) || a.Activity == nil {
+		label := fitOwn(model.Clip(model.StatusLabel(a), model.MaxText, g.Ellipsis), width-2, g.Ellipsis)
+		return []seg{fg(g.Dot+" "+label, color)}
+	}
+	mark, text := model.ActivityLabel(*a.Activity, g.Icons, g.Ellipsis)
+	if !icon {
+		return []seg{fg(p.spinner(), color), plain(" " + fitOwn(text, width-2, g.Ellipsis))}
+	}
+	return []seg{fg(p.spinner(), color), plain(" " + mark + " " + fitOwn(text, width-4, g.Ellipsis))}
+}
+
+// agentBox draws the box of an active agent at (x, y), at the given depth of the forest, with as
+// much of it as the step of the cluster holds.
+func (p painter) agentBox(c *canvas, x, y, depth int, step model.AgentStep, a *store.AgentView) {
 	g, t := p.g, p.t
 	color := style.StatusColor(a.Status, t)
 	b := g.BorderRound
 	st := sty{fg: color}
-	c.text(x, y, seg{b.TopLeft + strings.Repeat(b.Top, model.AgentWidth-2) + b.TopRight, st})
-	p.border(c, x, y, model.AgentWidth, model.AgentHeight, b, st)
+	box := step.Size()
+	inner := box.Width - 4
 	cx := x + 2
 
-	dur := p.duration(a)
-	dw := ansi.StringWidth(dur)
-	name := a.Type
-	if short := model.ShortModel(a.Model, g.Ellipsis); short != "" {
-		name = a.Type + " " + g.Middot + " " + short
+	if step == model.StepTiny {
+		// The smallest box has room for a single line, so the kind goes in the top border. It is
+		// cut for real, never by the terminal: the corner comes after it.
+		kind := model.FitWidth(a.Type, inner, g.Ellipsis)
+		pad := strings.Repeat(" ", max(0, inner-ansi.StringWidth(kind)))
+		c.line(x, y, box.Width, g.Ellipsis,
+			seg{b.TopLeft + " ", st}, seg{kind, sty{bold: true}}, seg{pad + " " + b.TopRight, st})
+		p.border(c, x, y, box.Width, box.Height, b, st)
+		mark := fg(g.Dot, color)
+		if domain.IsActive(a.Status) && a.Activity != nil {
+			mark = fg(p.spinner(), color)
+		}
+		dur := p.shortDuration(a)
+		c.line(cx, y+1, inner, g.Ellipsis, mark, plain(" "+fitOwn(dur, inner-2, g.Ellipsis)))
+		return
 	}
-	name = fitOwn(model.Clip(name, model.MaxText, g.Ellipsis), agentContent-durationReserve, g.Ellipsis)
-	c.line(cx, y+1, max(0, agentContent-1-dw), g.Ellipsis, seg{name, sty{bold: true}})
-	c.line(cx+agentContent-dw, y+1, dw, g.Ellipsis, plain(dur))
 
-	if !domain.IsActive(a.Status) || a.Activity == nil {
-		label := fitOwn(model.Clip(model.StatusLabel(a), model.MaxText, g.Ellipsis), agentContent-2, g.Ellipsis)
-		c.line(cx, y+2, agentContent, g.Ellipsis, fg(g.Dot+" "+label, color))
-	} else {
-		icon, text := model.ActivityLabel(*a.Activity, g.Icons, g.Ellipsis)
-		c.line(cx, y+2, agentContent, g.Ellipsis,
-			fg(p.spinner(), color), plain(" "+icon+" "+fitOwn(text, agentContent-4, g.Ellipsis)))
+	c.text(x, y, seg{b.TopLeft + strings.Repeat(b.Top, box.Width-2) + b.TopRight, st})
+	p.border(c, x, y, box.Width, box.Height, b, st)
+
+	// The kind has to stay readable: on the small steps the nesting marker gives way to it (the
+	// place of the box in the tree already tells the level) and the duration is the short one.
+	dur, nested, reserve := p.duration(a), depth > 0, durationReserve
+	if step == model.StepCompact {
+		dur, nested = p.shortDuration(a), false
+		reserve = ansi.StringWidth(dur) + 1
+	}
+	dw := ansi.StringWidth(dur)
+	c.line(cx, y+1, max(0, inner-1-dw), g.Ellipsis, p.agentTitle(a, nested, inner-reserve, step == model.StepFull)...)
+	c.line(cx+inner-dw, y+1, dw, g.Ellipsis, plain(dur))
+
+	c.line(cx, y+2, inner, g.Ellipsis, p.agentActivity(a, inner, color, step != model.StepCompact)...)
+	if step == model.StepCompact {
+		return
 	}
 
 	desc := "no description"
 	if a.Description != "" {
-		desc = fitOwn(model.Clip(a.Description, model.MaxText, g.Ellipsis), agentContent, g.Ellipsis)
+		desc = fitOwn(model.Clip(a.Description, model.MaxText, g.Ellipsis), inner, g.Ellipsis)
 	}
-	c.line(cx, y+3, agentContent, g.Ellipsis, fg(desc, t.Muted))
+	c.line(cx, y+3, inner, g.Ellipsis, fg(desc, t.Muted))
 }
 
 func padStart(s string, n int) string {

@@ -17,6 +17,8 @@ func agentContext(model string, used int, learned domain.LearnedContextWindows, 
 
 func agentView(agent domain.AgentState, learned domain.LearnedContextWindows, reportedModel int) *AgentView {
 	return &AgentView{
+		AgentID:       agent.AgentID,
+		ParentAgentID: agent.ParentAgentID,
 		Type:          agent.Type,
 		Description:   agent.Description,
 		Model:         agent.Model,

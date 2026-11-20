@@ -668,7 +668,8 @@ func TestTreeIsMemoized(t *testing.T) {
 	st := newFakeStore(snapshot([]*store.SessionView{sessionWithAgents(), session("claude:s2", nil)}, profiles))
 	a := newApp(testOptions(st, profiles), 100, 30)
 	fresh := func() treeModel {
-		return buildTreeModel(a.snap, a.profiles, a.nav, a.width, a.appearance.Glyphs.Line)
+		sel := selectSessions(a.snap, a.profiles, a.nav)
+		return buildTreeModel(sel, a.nav, a.width, a.bodyGeometry(sel).innerRows, a.appearance.Glyphs.Line)
 	}
 	same := func(step string) {
 		t.Helper()

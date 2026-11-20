@@ -228,22 +228,29 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // treeKey is everything buildTreeModel reads that can change while the app runs: the snapshot
-// (immutable, a new pointer per emission), the two navigation fields it consults, and the width.
-// The profiles and the glyphs are fixed at construction.
+// (immutable, a new pointer per emission), the two navigation fields it consults, and the size
+// of the body. The profiles and the glyphs are fixed at construction.
 type treeKey struct {
 	snap          *store.Snapshot
 	profileFilter string
 	detailKey     string
-	width         int
+	width, rows   int
 }
 
-// tree is the tree model of the current state, memoized on its inputs: sorting every session's
-// agents and laying out the grid is too much to repeat per message (the spinner alone ticks every
-// 160 ms and Update, settle and Render all ask for it).
+// tree is the tree model of the current state, with the geometry of the body worked out from
+// scratch; compose, which has it already, calls treeFor.
 func (a *App) tree() treeModel {
-	k := treeKey{a.snap, a.nav.ProfileFilter, a.nav.DetailKey, a.width}
+	sel := selectSessions(a.snap, a.profiles, a.nav)
+	return a.treeFor(sel, a.bodyGeometry(sel).innerRows)
+}
+
+// treeFor lays the selected sessions out in rows rows of body, memoized on its inputs: sorting
+// every session's agents and laying out the grid is too much to repeat per message (the spinner
+// alone ticks every 160 ms and Update, settle and Render all ask for it).
+func (a *App) treeFor(sel treeSel, rows int) treeModel {
+	k := treeKey{a.snap, a.nav.ProfileFilter, a.nav.DetailKey, a.width, rows}
 	if !a.treeCached || a.treeKey != k {
-		a.treeVal = buildTreeModel(a.snap, a.profiles, a.nav, a.width, a.appearance.Glyphs.Line)
+		a.treeVal = buildTreeModel(sel, a.nav, a.width, rows, a.appearance.Glyphs.Line)
 		a.treeKey, a.treeCached = k, true
 		a.treeBuilds++
 	}
@@ -421,44 +428,69 @@ type frame struct {
 	spinning   bool
 }
 
-func (a *App) compose() frame {
+// bodyGeom is the vertical geometry of a screen: the bars and the rows they leave the body. It
+// comes before the tree layout, which needs those rows (see model.NewTreeLayout), and it only
+// reads the selected sessions, never the layout.
+type bodyGeom struct {
+	screenRows int
+	status     model.StatusBarModel
+	top        model.TopBarModel
+	showTop    bool
+	// bodyRows is the body; innerRows is what is left of it for the tree, under the notice row.
+	bodyRows, innerRows int
+}
+
+func (a *App) bodyGeometry(sel treeSel) bodyGeom {
 	g, t := a.appearance.Glyphs, a.appearance.Theme
-	var f frame
-	f.screenRows = max(1, a.height-1)
-	f.tooSmall = a.width < model.MinTermColumns || a.height < model.MinTermRows
-	f.tree = a.tree()
+	var geo bodyGeom
+	geo.screenRows = max(1, a.height-1)
+	var detail *store.SessionView
 	if a.nav.View == model.ViewDetail {
-		f.detail = f.tree.find(a.nav.DetailKey)
+		detail = sel.find(a.nav.DetailKey)
 	}
 	hints := model.HintsFor(g)
 	hint := hints.Tree
-	if !f.tree.multiProfile {
+	if !sel.multiProfile {
 		hint = model.SingleProfileTreeHints(g)
 	}
 	switch {
 	case a.nav.Help:
 		hint = hints.Help
-	case f.detail != nil:
+	case detail != nil:
 		hint = hints.Detail
 	}
-	f.status = model.NewStatusBarModel(model.StatusBarInput{
-		Snapshot: a.snap, Profiles: a.profiles, ProfileFilter: f.tree.filter, Sessions: f.tree.sessions,
+	geo.status = model.NewStatusBarModel(model.StatusBarInput{
+		Snapshot: a.snap, Profiles: a.profiles, ProfileFilter: sel.filter, Sessions: sel.sessions,
 		Hint: hint, Columns: a.width, Retained: a.retained, Tones: a.tones, Glyphs: g, Theme: t,
 	})
-	f.top = a.topBar()
-	belowTop := f.screenRows - model.StatusBarHeight(f.status)
-	f.showTop = a.snap != nil && a.appearance.Layout.TopBar &&
-		belowTop-model.TopBarHeight(f.top) >= f.tree.layout.SessionHeight+treeIndicatorRows
+	geo.top = a.topBar()
+	belowTop := geo.screenRows - model.StatusBarHeight(geo.status)
+	geo.showTop = a.snap != nil && a.appearance.Layout.TopBar &&
+		belowTop-model.TopBarHeight(geo.top) >= model.SessionBoxHeight(sel.multiProfile)+treeIndicatorRows
 	topRows := 0
-	if f.showTop {
-		topRows = model.TopBarHeight(f.top)
+	if geo.showTop {
+		topRows = model.TopBarHeight(geo.top)
 	}
-	f.bodyRows = belowTop - topRows
+	geo.bodyRows = belowTop - topRows
 	notice := 0
 	if a.nav.Notice != "" || a.nav.Close.Key != "" {
 		notice = 1
 	}
-	f.innerRows = max(1, f.bodyRows-notice)
+	geo.innerRows = max(1, geo.bodyRows-notice)
+	return geo
+}
+
+func (a *App) compose() frame {
+	var f frame
+	f.tooSmall = a.width < model.MinTermColumns || a.height < model.MinTermRows
+	sel := selectSessions(a.snap, a.profiles, a.nav)
+	geo := a.bodyGeometry(sel)
+	f.screenRows, f.status, f.top, f.showTop = geo.screenRows, geo.status, geo.top, geo.showTop
+	f.bodyRows, f.innerRows = geo.bodyRows, geo.innerRows
+	f.tree = a.treeFor(sel, geo.innerRows)
+	if a.nav.View == model.ViewDetail {
+		f.detail = f.tree.find(a.nav.DetailKey)
+	}
 	f.viewport = f.tree.layout.Viewport(f.innerRows, a.nav.SelectedKey, a.treeTop)
 	if f.tooSmall || a.snap == nil {
 		f.detail = nil

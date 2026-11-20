@@ -27,14 +27,12 @@ func treeSpinning(tm treeModel, vp model.TreeViewport) bool {
 			if busy(s) && inView(vp, cl.Y, tm.layout.SessionHeight) {
 				return true
 			}
-			for _, line := range cl.Lines {
-				if !inView(vp, cl.Y+line.Y, model.AgentHeight) {
+			for _, box := range cl.Agents {
+				if !inView(vp, cl.Y+box.Y, box.Size().Height) {
 					continue
 				}
-				for _, k := range line.Keys {
-					if a := s.Agents[k]; a != nil && domain.IsActive(a.Status) && a.Activity != nil {
-						return true
-					}
+				if a := s.Agents[box.Key]; a != nil && domain.IsActive(a.Status) && a.Activity != nil {
+					return true
 				}
 			}
 		}
@@ -78,17 +76,17 @@ func (p painter) drawCluster(c *canvas, cl model.ClusterLayout, s *store.Session
 	if cl.Stem != nil {
 		c.text(x+cl.Stem.Left, y+cl.Stem.Y, seg{cl.Stem.Text, muted})
 	}
-	for _, line := range cl.Lines {
-		c.text(x+line.Connector.Left, y+line.Connector.Y, seg{line.Connector.Text, muted})
-		if line.HasTrunk {
-			for r := range model.AgentHeight {
-				c.text(x+line.Trunk, y+line.Y+r, seg{p.g.Line.Vertical, muted})
-			}
+	for _, t := range cl.Trunks {
+		for r := range t.Height {
+			c.text(x+t.X, y+t.Y+r, seg{p.g.Line.Vertical, muted})
 		}
-		for j, k := range line.Keys {
-			if a := s.Agents[k]; a != nil {
-				p.agentBox(c, x+line.Left+j*(model.AgentWidth+model.AgentGap), y+line.Y, a)
-			}
+	}
+	for _, bus := range cl.Buses {
+		c.text(x+bus.Left, y+bus.Y, seg{bus.Text, muted})
+	}
+	for _, box := range cl.Agents {
+		if a := s.Agents[box.Key]; a != nil {
+			p.agentBox(c, x+box.X, y+box.Y, box.Depth, box.Step, a)
 		}
 	}
 }

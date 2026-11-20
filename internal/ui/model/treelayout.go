@@ -7,9 +7,16 @@ import (
 )
 
 // The tree: each session is a cluster, with the session box on top, a vertical stem and, below,
-// the active agents side by side joined by a horizontal bus. When the agents do not fit in one
-// row, a vertical trunk runs down the left of the agents and joins the bus of each next row
-// without crossing any box. Clusters sit side by side and wrap by the terminal width.
+// the active agents. Every agent sits centered over the agents it launched: a subtree is as wide
+// as its children need, the children of a box hang side by side under it and a bus joins the
+// stem of the parent to the stem of each child. The size of the agent boxes is a step per level
+// of the tree (see PickStepPlan): the levels nearer the session may take a larger step than the
+// deeper ones, never the other way round. A block of children that does not fit the width wraps
+// into rows, each one still centered on the stem of its parent, with a vertical trunk at their
+// left that joins the bus of every row to the bus that hangs from the parent, crossing no box.
+// Clusters sit side by side and wrap by the terminal width. The step is the largest one the tree
+// fits in both dimensions: the width of a cluster picks it (see PickStepPlan) and, when the whole
+// content is still taller than the body, every session drops a step together (see NewTreeLayout).
 //
 // Coordinates: x in columns and y in rows, from the corner of the body (the area above the
 // status bar). Inside a cluster, positions are relative to its corner.
@@ -21,7 +28,7 @@ const (
 	SessionHeight = 7
 	// SessionHeightMulti has one more line, the centered profile label under the title.
 	SessionHeightMulti = SessionHeight + 1
-	// AgentWidth is the compact agent box (with the border).
+	// AgentWidth is the agent box of the largest step (with the border).
 	AgentWidth = 26
 	// AgentHeight is 3 content lines and the border.
 	AgentHeight = 5
@@ -31,8 +38,8 @@ const (
 	ClusterGap = 4
 	// RowGap is the rows between rows of clusters.
 	RowGap = 1
-	// TrunkWidth is the columns of the trunk at the left of the agents (the trunk and a space)
-	// when there are several rows.
+	// TrunkWidth is the columns of the trunk at the left of a block of agents (the trunk and a
+	// space) when it wraps into several rows.
 	TrunkWidth = 2
 
 	// MinTermColumns and MinTermRows are the smallest terminal: below it only a notice shows. At
@@ -44,6 +51,62 @@ const (
 	UnlimitedRows = -1
 )
 
+// AgentStep is how much of an agent box is drawn. The steps go from the full box down to the
+// smallest one; every level of a cluster takes the largest step its tree fits in (see
+// PickStepPlan).
+type AgentStep int
+
+const (
+	// StepFull is the full box: kind and model with the duration, the activity and the description.
+	StepFull AgentStep = iota
+	// StepNoModel drops the model from the first line and clips the description.
+	StepNoModel
+	// StepCompact keeps the kind with the duration and the activity, with no description.
+	StepCompact
+	// StepTiny keeps the kind and, under it, the spinner with the duration.
+	StepTiny
+)
+
+// AgentSize is the size of an agent box, border included.
+type AgentSize struct {
+	Width, Height int
+}
+
+// agentSizes is the size of each step, from the largest to the smallest.
+var agentSizes = [...]AgentSize{
+	StepFull:    {Width: AgentWidth, Height: AgentHeight},
+	StepNoModel: {Width: 20, Height: 5},
+	StepCompact: {Width: 14, Height: 4},
+	StepTiny:    {Width: 13, Height: 3},
+}
+
+// SmallestStep is the last step, the one that is used when no other fits.
+const SmallestStep = AgentStep(len(agentSizes) - 1)
+
+// Size is the box of the step (the full one for a step out of range).
+func (s AgentStep) Size() AgentSize {
+	if s < 0 || s > SmallestStep {
+		return agentSizes[StepFull]
+	}
+	return agentSizes[s]
+}
+
+// StepPlan is the step of the agent boxes by level of the tree: the first entry is the level that
+// hangs from the session and the last one holds for everything deeper. It never grows with the
+// depth and never skips a step between neighbor levels (see PickStepPlan).
+type StepPlan []AgentStep
+
+// At is the step of the given level (the last one of the plan from there on).
+func (p StepPlan) At(depth int) AgentStep {
+	if len(p) == 0 {
+		return StepFull
+	}
+	return p[clamp(depth, 0, len(p)-1)]
+}
+
+// Size is the box of the given level.
+func (p StepPlan) Size(depth int) AgentSize { return p.At(depth).Size() }
+
 // SessionBoxHeight is the height of every session box in a run: it depends only on how many
 // profiles are watched (fixed while the viewer runs), never on the session, so the layout stays
 // a grid.
@@ -54,11 +117,17 @@ func SessionBoxHeight(multiProfile bool) int {
 	return SessionHeight
 }
 
+// TreeAgent is an agent to lay out with the agents it launched, in the displayed order.
+type TreeAgent struct {
+	Key      string
+	Children []TreeAgent
+}
+
 // TreeSession is a session to lay out.
 type TreeSession struct {
 	Key string
-	// AgentKeys are the active agents, in the displayed order.
-	AgentKeys []string
+	// Agents are the first-level active agents, in the displayed order; each carries its own.
+	Agents []TreeAgent
 }
 
 // Connector is a line of connectors: Text starts at column Left of the cluster, on row Y.
@@ -67,19 +136,22 @@ type Connector struct {
 	Text    string
 }
 
-// AgentLine is a row of agents of a cluster and the bus right above it.
-type AgentLine struct {
-	// Y is the row (relative to the cluster) of the top of the agent boxes.
-	Y int
-	// Left is the column (relative to the cluster) of the first agent; the next ones come every
-	// AgentWidth + AgentGap.
-	Left      int
-	Keys      []string
-	Connector Connector
-	// Trunk is the column (relative to the cluster) of the trunk that runs beside the agents of
-	// this row, down to the next; valid only with HasTrunk (not the last row, nor with one row).
-	Trunk    int
-	HasTrunk bool
+// AgentBox is a placed agent box: its left corner inside the cluster and how far it is from the
+// first level (0 for an agent that hangs from the session).
+type AgentBox struct {
+	Key   string
+	X, Y  int
+	Depth int
+	// Step is the step of its level (see StepPlan).
+	Step AgentStep
+}
+
+// Size is the box of the agent.
+func (b AgentBox) Size() AgentSize { return b.Step.Size() }
+
+// Trunk is a vertical run of line at column X, from row Y, Height rows tall.
+type Trunk struct {
+	X, Y, Height int
 }
 
 // ClusterLayout is a session box with its agents.
@@ -94,8 +166,12 @@ type ClusterLayout struct {
 	// Anchor is the column (relative) of the center of the session box, where the stem leaves.
 	Anchor int
 	// Stem is the line under the session; nil without active agents.
-	Stem  *Connector
-	Lines []AgentLine
+	Stem   *Connector
+	Agents []AgentBox
+	// Buses are the horizontal lines that join a parent to its children, one per row of children.
+	Buses []Connector
+	// Trunks are the vertical lines that join the buses of the rows a block wrapped into.
+	Trunks []Trunk
 }
 
 // ClusterRow is a row of clusters.
@@ -172,118 +248,354 @@ func ConnectorRow(ups, downs []int, line style.Lines) (left int, text string) {
 	return lo, string(b)
 }
 
-// AgentsPerLine is how many agents fit in maxWidth columns (at least 1).
-func AgentsPerLine(maxWidth int) int {
-	return max(1, floorDiv(maxWidth+AgentGap, AgentWidth+AgentGap))
+// subtreeWidth is the columns the agent, at the given level, takes with the agents it launched,
+// nothing wrapped.
+func subtreeWidth(a TreeAgent, plan StepPlan, depth int) int {
+	return max(plan.Size(depth).Width, forestWidth(a.Children, plan, depth+1))
 }
 
-// floorDiv is the integer division rounded toward negative infinity.
-func floorDiv(a, b int) int {
-	q := a / b
-	if a%b != 0 && (a < 0) != (b < 0) {
-		q--
+// forestWidth is the columns the agents of a level take side by side, nothing wrapped (0 without
+// agents).
+func forestWidth(agents []TreeAgent, plan StepPlan, depth int) int {
+	total := 0
+	for i, a := range agents {
+		if i > 0 {
+			total += AgentGap
+		}
+		total += subtreeWidth(a, plan, depth)
 	}
-	return q
+	return total
 }
 
-// AgentLineWidth is the width of a row with n agents.
-func AgentLineWidth(n int) int {
-	if n <= 0 {
-		return 0
+// MaxBlockRows is how many rows a block of siblings may wrap into for a step to be worth taking:
+// two rows of readable boxes tell more than a single row of the smallest ones.
+const MaxBlockRows = 2
+
+// ForestDepth is how many levels the forest has (0 without agents).
+func ForestDepth(agents []TreeAgent) int {
+	depth := 0
+	for _, a := range agents {
+		depth = max(depth, 1+ForestDepth(a.Children))
 	}
-	return n*AgentWidth + (n-1)*AgentGap
+	return depth
+}
+
+// blockRows is the most rows a block of siblings of the measured tree wrapped into.
+func blockRows(rows [][]sized) int {
+	most := len(rows)
+	for _, row := range rows {
+		for _, s := range row {
+			if len(s.rows) > 0 {
+				most = max(most, blockRows(s.rows))
+			}
+		}
+	}
+	return most
+}
+
+// planRows is the most rows a block of siblings of the tree wraps into with the boxes of the
+// plan, and whether the cluster still holds maxWidth columns.
+func planRows(s TreeSession, plan StepPlan, maxWidth int) (rows int, fits bool) {
+	blocks, wrapped, rowsWidth := childRows(s.Agents, plan, 0, maxWidth)
+	if len(blocks) == 0 {
+		return 0, true
+	}
+	return blockRows(blocks), trunkRoom(wrapped)+rowsWidth <= maxWidth
+}
+
+// fitsRows reports whether the tree of the session, with the boxes of the plan, holds maxWidth
+// columns with no block of siblings wrapping into more than maxRows rows.
+func fitsRows(s TreeSession, plan StepPlan, maxWidth, maxRows int) bool {
+	rows, fits := planRows(s, plan, maxWidth)
+	return fits && rows <= maxRows
+}
+
+// PickStepPlan is the step of every level of a session. It starts from the largest step the whole
+// tree fits maxWidth columns in with no block of siblings over MaxBlockRows rows (the smallest
+// step when none of them does, and then the blocks wrap into as many rows as they need). From
+// there every level, from the first one down, takes one step more as long as the whole cluster
+// still holds the width within MaxBlockRows rows: the agents nearer the session are the ones
+// worth reading, so they end up no smaller than the deeper ones and at most one step apart.
+func PickStepPlan(s TreeSession, maxWidth int) StepPlan {
+	levels := ForestDepth(s.Agents)
+	if levels == 0 {
+		return StepPlan{StepFull}
+	}
+	base := SmallestStep
+	for step := StepFull; step < SmallestStep; step++ {
+		if fitsRows(s, StepPlan{step}, maxWidth, MaxBlockRows) {
+			base = step
+			break
+		}
+	}
+	plan := make(StepPlan, levels)
+	for i := range plan {
+		plan[i] = base
+	}
+	for d := range plan {
+		if plan[d] == StepFull || (d > 0 && plan[d]-1 < plan[d-1]) {
+			continue
+		}
+		promoted := slices.Clone(plan)
+		promoted[d]--
+		if fitsRows(s, promoted, maxWidth, MaxBlockRows) {
+			plan = promoted
+		}
+	}
+	return plan
 }
 
 // center is the horizontal center of a box of the given width that starts at left.
 func center(left, width int) int { return left + width/2 }
 
-// NewClusterLayout lays out the cluster of a session in at most maxWidth columns. In one row the
-// agents sit centered under the session and the bus joins the stem to the drops (`┌──┴──┐`). In
-// several rows the bus of the first also drops through the trunk, left of the agents; the bus of
-// each next row leaves the trunk (`├`/`└`), with no link to the agents above. Without X and Y,
-// which TreeLayout fills.
-func NewClusterLayout(s TreeSession, maxWidth, boxHeight int, line style.Lines) ClusterLayout {
-	n := len(s.AgentKeys)
-	multiLine := n > AgentsPerLine(maxWidth)
-	perLine := max(1, n)
-	if multiLine {
-		perLine = AgentsPerLine(maxWidth - TrunkWidth)
+// sized is a measured subtree: how much room it takes and the rows its children wrap into.
+type sized struct {
+	agent TreeAgent
+	// step and box are the step of its level and the box it draws.
+	step AgentStep
+	box  AgentSize
+	// width and height are the room the whole subtree takes.
+	width, height int
+	// rows are the children, in the rows they wrap into (nil without children).
+	rows [][]sized
+	// wrapped tells the rows need a trunk at their left to join them.
+	wrapped bool
+	// rowsWidth is the widest row of children (the trunk not counted).
+	rowsWidth int
+}
+
+// rowWidth is the columns a row of subtrees takes, with the gaps between them.
+func rowWidth(row []sized) int {
+	total := 0
+	for i, s := range row {
+		if i > 0 {
+			total += AgentGap
+		}
+		total += s.width
 	}
-	firstWidth := AgentLineWidth(min(n, perLine))
-	width := firstWidth
-	if multiLine {
-		width += TrunkWidth
+	return total
+}
+
+// rowHeight is the rows the tallest subtree of the row takes.
+func rowHeight(row []sized) int {
+	height := 0
+	for _, s := range row {
+		height = max(height, s.height)
 	}
-	width = max(SessionWidth, width)
-	// In several rows the agent rows are centered in the area right of the trunk and the session
-	// on them; at the minimum width the session rules and the trunk fits in the leftover.
-	var anchor int
-	if multiLine && width > SessionWidth {
-		anchor = TrunkWidth + firstWidth/2
-	} else {
-		anchor = center((width-SessionWidth)/2, SessionWidth)
+	return height
+}
+
+// measure sizes the subtree of a, which sits on the given level, with its children in at most
+// budget columns.
+func measure(a TreeAgent, plan StepPlan, depth, budget int) sized {
+	box := plan.Size(depth)
+	s := sized{agent: a, step: plan.At(depth), box: box, width: box.Width, height: box.Height}
+	s.rows, s.wrapped, s.rowsWidth = childRows(a.Children, plan, depth+1, budget)
+	if len(s.rows) == 0 {
+		return s
 	}
+	s.width = max(box.Width, trunkRoom(s.wrapped)+s.rowsWidth)
+	for _, row := range s.rows {
+		s.height += 1 + rowHeight(row)
+	}
+	return s
+}
+
+func measureAll(agents []TreeAgent, plan StepPlan, depth, budget int) []sized {
+	out := make([]sized, len(agents))
+	for i, a := range agents {
+		out[i] = measure(a, plan, depth, budget)
+	}
+	return out
+}
+
+// trunkRoom is the columns a block of agents keeps at its left for the trunk.
+func trunkRoom(wrapped bool) int {
+	if wrapped {
+		return TrunkWidth
+	}
+	return 0
+}
+
+// childRows measures children and splits them into the rows they wrap into: one row when they
+// fit in budget columns, else as many as needed in the budget left of the trunk.
+func childRows(children []TreeAgent, plan StepPlan, depth, budget int) (rows [][]sized, wrapped bool, rowsWidth int) {
+	if len(children) == 0 {
+		return nil, false, 0
+	}
+	if one := measureAll(children, plan, depth, budget); rowWidth(one) <= budget {
+		return [][]sized{one}, false, rowWidth(one)
+	}
+	room := max(plan.Size(depth).Width, budget-TrunkWidth)
+	rows = packRows(measureAll(children, plan, depth, room), room)
+	for _, row := range rows {
+		rowsWidth = max(rowsWidth, rowWidth(row))
+	}
+	return rows, len(rows) > 1, rowsWidth
+}
+
+// packRows fills rows of at most room columns, in order (one subtree per row at the very least).
+func packRows(all []sized, room int) [][]sized {
+	var rows [][]sized
+	var current []sized
+	for _, s := range all {
+		if len(current) > 0 && rowWidth(current)+AgentGap+s.width > room {
+			rows = append(rows, current)
+			current = nil
+		}
+		current = append(current, s)
+	}
+	if len(current) > 0 {
+		rows = append(rows, current)
+	}
+	return rows
+}
+
+// boxAnchor is the column of the stem of a box of boxWidth columns that starts at column x of a
+// subtree of width columns: centered over its children when they are wider than the box, else
+// centered in the room the subtree takes.
+func boxAnchor(x, width, boxWidth, trunk, rowsWidth int) int {
+	if rowsWidth > 0 && trunk+rowsWidth > boxWidth {
+		return x + trunk + rowsWidth/2
+	}
+	return center(x+(width-boxWidth)/2, boxWidth)
+}
+
+// placer fills a cluster with the boxes, buses and trunks of its agents.
+type placer struct {
+	line style.Lines
+	c    *ClusterLayout
+}
+
+// place puts the box of s, which takes width columns from column x with its top on row y, and
+// everything under it. It returns the column of its stem (the center of its box).
+func (p *placer) place(s sized, depth, x, y int) int {
+	trunk := trunkRoom(s.wrapped)
+	anchor := boxAnchor(x, s.width, s.box.Width, trunk, s.rowsWidth)
+	p.c.Agents = append(p.c.Agents,
+		AgentBox{Key: s.agent.Key, X: anchor - s.box.Width/2, Y: y, Depth: depth, Step: s.step})
+	if len(s.rows) > 0 {
+		p.placeRows(s.rows, s.wrapped, anchor, x+trunk, depth+1, y+s.box.Height)
+	}
+	return anchor
+}
+
+// placeRows lays out the rows of children of a box: anchor is the column of the stem of that
+// box, minLeft the leftmost column the children may take (right of the trunk, when the rows
+// wrapped) and y the row of the first bus. Every row is centered on the stem; the next ones hang
+// from the trunk. It returns the row right below the last child.
+func (p *placer) placeRows(rows [][]sized, wrapped bool, anchor, minLeft, depth, y int) int {
+	lefts := make([]int, len(rows))
+	for i, row := range rows {
+		lefts[i] = max(minLeft, anchor-rowWidth(row)/2)
+	}
+	trunkX := slices.Min(lefts) - TrunkWidth
+	firstBus, lastBus := y, y
+	for i, row := range rows {
+		busY, x := y, lefts[i]
+		centers := make([]int, len(row))
+		for j, child := range row {
+			centers[j] = p.place(child, depth, x, busY+1)
+			x += child.width + AgentGap
+		}
+		// Only the first row joins the stem of the parent; the others rise only by the trunk.
+		ups := []int{anchor}
+		if i > 0 {
+			ups = []int{trunkX}
+		}
+		downs := centers
+		if wrapped && i < len(rows)-1 {
+			downs = append([]int{trunkX}, centers...)
+		}
+		left, text := ConnectorRow(ups, downs, p.line)
+		p.c.Buses = append(p.c.Buses, Connector{Y: busY, Left: left, Text: text})
+		lastBus = busY
+		y = busY + 1 + rowHeight(row)
+	}
+	if wrapped && lastBus > firstBus {
+		p.c.Trunks = append(p.c.Trunks, Trunk{X: trunkX, Y: firstBus + 1, Height: lastBus - firstBus - 1})
+	}
+	return y
+}
+
+// NewClusterLayout lays out the cluster of a session in at most maxWidth columns, with the agent
+// boxes of the given step. The first-level agents sit centered under the session, each agent
+// centered over the ones it launched, and a bus joins every parent to its children
+// (`┌──┴──┐`). A block of children that does not fit the width wraps into rows joined by a
+// trunk at their left (`├`/`└`), with no link to the agents above. Without X and Y, which
+// TreeLayout fills.
+func NewClusterLayout(s TreeSession, maxWidth, boxHeight int, plan StepPlan, line style.Lines) ClusterLayout {
+	rows, wrapped, rowsWidth := childRows(s.Agents, plan, 0, maxWidth)
+	trunk := trunkRoom(wrapped)
+	width := max(SessionWidth, trunk+rowsWidth)
+	anchor := boxAnchor(0, width, SessionWidth, trunk, rowsWidth)
 	c := ClusterLayout{
 		Key: s.Key, Width: width, Height: boxHeight,
 		SessionLeft: anchor - SessionWidth/2, Anchor: anchor,
 	}
-	if n == 0 {
+	if len(rows) == 0 {
 		return c
 	}
-
 	c.Stem = &Connector{Y: boxHeight, Left: anchor, Text: line.Vertical}
-	var groups [][]string
-	for i := 0; i < n; i += perLine {
-		groups = append(groups, s.AgentKeys[i:min(i+perLine, n)])
+	p := placer{line: line, c: &c}
+	p.placeRows(rows, wrapped, anchor, trunk, 0, boxHeight+1)
+	for _, a := range c.Agents {
+		box := a.Size()
+		c.Width = max(c.Width, a.X+box.Width)
+		c.Height = max(c.Height, a.Y+box.Height)
 	}
-	// Each row is centered on the stem (the first, the widest, sets the trunk column).
-	lefts := make([]int, len(groups))
-	for i, keys := range groups {
-		lefts[i] = anchor - AgentLineWidth(len(keys))/2
-	}
-	trunk := 0
-	if multiLine {
-		trunk = slices.Min(lefts) - TrunkWidth
-	}
-
-	busY := boxHeight + 1
-	for i, keys := range groups {
-		left := lefts[i]
-		drops := make([]int, len(keys))
-		for j := range keys {
-			drops[j] = center(left+j*(AgentWidth+AgentGap), AgentWidth)
-		}
-		continues := multiLine && i < len(groups)-1
-		ups := []int{anchor}
-		if i > 0 && multiLine {
-			ups = []int{trunk}
-		}
-		downs := drops
-		if continues {
-			downs = append([]int{trunk}, drops...)
-		}
-		l, text := ConnectorRow(ups, downs, line)
-		al := AgentLine{
-			Y: busY + 1, Left: left, Keys: keys,
-			Connector: Connector{Y: busY, Left: l, Text: text},
-		}
-		if continues {
-			al.Trunk, al.HasTrunk = trunk, true
-		}
-		c.Lines = append(c.Lines, al)
-		busY += 1 + AgentHeight
-	}
-	c.Height = c.Lines[len(c.Lines)-1].Y + AgentHeight
 	return c
 }
 
 // NewTreeLayout spreads the clusters in rows that fit in columns, in the given order, each row
-// centered. boxHeight is the height of the session boxes (see SessionBoxHeight).
-func NewTreeLayout(sessions []TreeSession, columns, boxHeight int, line style.Lines) TreeLayout {
+// centered. boxHeight is the height of the session boxes (see SessionBoxHeight). bodyRows is the
+// rows the body gives the tree (UnlimitedRows for no limit): each session first takes the step
+// its width allows (see PickStepPlan) and, when the content is taller than the body, every
+// session drops a step together until the whole thing fits, since the height belongs to the set
+// of clusters and not to any one of them. When not even the smallest boxes fit, the content
+// keeps the boxes of the width and scrolls (see Viewport).
+func NewTreeLayout(sessions []TreeSession, columns, bodyRows, boxHeight int, line style.Lines) TreeLayout {
 	cols := max(1, columns)
+	plans := make([]StepPlan, len(sessions))
+	for i, s := range sessions {
+		plans[i] = PickStepPlan(s, cols)
+	}
+	layout := placeClusters(sessions, plans, cols, boxHeight, line)
+	if bodyRows < 0 || layout.ContentHeight <= bodyRows {
+		return layout
+	}
+	for demoteAll(plans) {
+		if smaller := placeClusters(sessions, plans, cols, boxHeight, line); smaller.ContentHeight <= bodyRows {
+			return smaller
+		}
+	}
+	// Not even the smallest boxes fit: the session boxes have a fixed height, so enough sessions
+	// overflow the body on their own. Shrinking the agents buys nothing then, and the largest
+	// boxes read better, so the tree keeps them and the rest scrolls.
+	return layout
+}
+
+// demoteAll drops every level of every plan one step; it reports whether any of them moved, so a
+// caller that is still out of room stops instead of looping. The monotony of a plan survives it:
+// the distance between neighbor levels either stays or closes to zero.
+func demoteAll(plans []StepPlan) bool {
+	moved := false
+	for _, plan := range plans {
+		for d, step := range plan {
+			if step < SmallestStep {
+				plan[d], moved = step+1, true
+			}
+		}
+	}
+	return moved
+}
+
+// placeClusters lays every session out with its plan and spreads the clusters in rows of at most
+// cols columns, each row centered.
+func placeClusters(sessions []TreeSession, plans []StepPlan, cols, boxHeight int, line style.Lines) TreeLayout {
 	clusters := make([]ClusterLayout, len(sessions))
 	for i, s := range sessions {
-		clusters[i] = NewClusterLayout(s, cols, boxHeight, line)
+		clusters[i] = NewClusterLayout(s, cols, boxHeight, plans[i], line)
 	}
 
 	var groups [][]ClusterLayout

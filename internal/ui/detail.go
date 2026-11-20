@@ -22,6 +22,11 @@ const (
 	minPanelRows = 4
 	// toolIndent is the indent of the expanded tools of an agent.
 	toolIndent = 7
+	// nestIndentStep is the columns a level of nesting indents the title of an agent row.
+	nestIndentStep = 2
+	// maxNestIndent is the widest indent a row may spend on the nesting, so a deep chain still
+	// leaves room for the kind and the description.
+	maxNestIndent = 8
 )
 
 // detailGeometry is the scroll of the agents panel, computed apart from the drawing so the app
@@ -52,7 +57,7 @@ func agentRowHeight(a *store.AgentView, expanded bool, maxToolRows int) int {
 // detailLayout scrolls the agents from prevTop to keep the selected one visible; rows < 0 means
 // no limit.
 func detailLayout(s *store.SessionView, nav model.NavState, rows, prevTop int) detailGeometry {
-	g := detailGeometry{agents: sortedAgents(s.Agents)}
+	g := detailGeometry{agents: orderedAgents(s.Agents)}
 	g.compact = rows >= 0 && rows-detailHeaderRows < minPanelRows
 	g.end = len(g.agents)
 	if rows < 0 {
@@ -131,7 +136,7 @@ func (p painter) drawDetail(c *canvas, y int, in detailInput) int {
 		}
 		for i := in.geo.start; i < in.geo.end; i++ {
 			a := agents[i]
-			y = p.agentRow(c, y, a.agent, i == in.nav.AgentIndex, a.key == in.nav.ExpandedAgentKey, in.geo.maxToolRows)
+			y = p.agentRow(c, y, a, i == in.nav.AgentIndex, a.key == in.nav.ExpandedAgentKey, in.geo.maxToolRows)
 		}
 		if in.geo.start > 0 || in.geo.end < len(agents) {
 			c.line(0, y, w, g.Ellipsis, seg{"agents " + strconv.Itoa(in.geo.start+1) + "-" +
@@ -307,16 +312,29 @@ func (p painter) toolLine(c *canvas, y int, tool domain.PendingTool, indent int)
 	c.line(0, y, c.w, g.Ellipsis, segs...)
 }
 
-// agentRow draws an agent of the detail (two rows, plus its tools when expanded).
-func (p painter) agentRow(c *canvas, y int, a *store.AgentView, selected, expanded bool, maxToolRows int) int {
+// nestIndent is the marker a nested agent carries in its title in the detail. The panel is a
+// flat list, so here the marker carries the depth itself: one step of indent per level, up to
+// maxNestIndent columns. It goes inline, so an agent still takes two rows (see agentRowHeight).
+func nestIndent(depth int, g style.Glyphs) string {
+	if depth <= 0 {
+		return ""
+	}
+	return strings.Repeat(" ", min(maxNestIndent, nestIndentStep*(depth-1))) + g.Line.UpRight + " "
+}
+
+// agentRow draws an agent of the detail (two rows, plus its tools when expanded). A nested
+// sub-agent carries its depth in the indent of the title, so the row count does not change.
+func (p painter) agentRow(c *canvas, y int, ka keyedAgent, selected, expanded bool, maxToolRows int) int {
 	g, t := p.g, p.t
+	a := ka.agent
+	nest := nestIndent(ka.depth, g)
 	w := c.w
 	ell := g.Ellipsis
 	color := style.StatusColor(a.Status, t)
 	sep := " " + g.Middot + " "
 	ctxPct := model.NewContextLabel(a.Context.Used, a.Context.Percent, a.Context.ContextWindow, 10, g, t).Pct
 	status := g.Dot + " " + fitOwn(model.StatusLabel(a), w-6, ell)
-	room := w - (3 + ansi.StringWidth(status) + 1)
+	room := w - (3 + ansi.StringWidth(status) + 1 + ansi.StringWidth(nest))
 	typ := fitOwn(model.Clip(a.Type, model.MaxText, ell), room, ell)
 	descRoom := room - ansi.StringWidth(typ) - 2
 	desc := ""
@@ -357,7 +375,7 @@ func (p painter) agentRow(c *canvas, y int, a *store.AgentView, selected, expand
 		mark = g.Collapsed
 	}
 	c.line(0, y, w, ell, fg(pointer, t.Accent), plain(mark+" "), fg(status, color), plain(" "),
-		seg{typ, sty{bold: selected}}, plain(desc))
+		fg(nest, t.Muted), seg{typ, sty{bold: selected}}, plain(desc))
 	y++
 	c.line(0, y, w, ell, fg("     "+short+sep+bgfg+sep+p.duration(a)+sep+ctxText+tailText, t.Muted))
 	y++

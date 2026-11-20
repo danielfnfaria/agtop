@@ -1,0 +1,29 @@
+✳ claude     5h —                      7d —                    (run: agtop setup)   ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+✳ claude-x   5h —                      7d —                                         ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+────────────────────────────────────────────────────────────────────────────────────────────────────
+✳ Nested task [claude]
+cwd /home/u/projects/nest
+branch main · model Opus 4.7 · version 2.1.0 · pid 888
+provider ✳ Claude Code · profile claude (/tmp/a/.claude)
+● busy · context ████████░░░░░░░░░░░░ 40% 80k/200k
+tokens input 0 · output 0 · cache read 0 · cache create 0
+started — · last activity 5s ago (22:13:15)
+
+ Agents (5)   Pending tools (0)
+›  ● running coordinator  splits the work
+     opus · fg · 1m00s · ctx 0 (0%) · out 0 · … thinking
+   ● running └ executor  writes the code
+     — · fg · 50s · ctx 0 (~0%) · out 0 · … thinking
+   ● running   └ explorer  looks something up
+     — · fg · 30s · ctx 0 (~0%) · out 0 · … thinking
+   ● launched └ reviewer  reviews the diff
+     — · fg · 40s · ctx 0 (~0%) · out 0 · ◌ starting
+   ● running general  answers a question
+     — · fg · 20s · ctx 0 (~0%) · out 0 · … thinking
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ agtop  │ 1 session ● 1 busy │ ⚙ 5 agents │ ✗ 0 errors
+                                             Esc back  Tab panel  ↑↓ agent  ↵ expand  ? help  q quit
