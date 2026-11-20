@@ -10,7 +10,7 @@ const SlotWidth = 1
 // GlyphSlots are the single-value slots a user may override, in documentation order.
 var GlyphSlots = []string{
 	"barFull", "barEmpty", "dot", "pointer", "left", "up", "right", "down", "middot", "dash",
-	"expanded", "collapsed", "ellipsis", "enter", "gear", "cross", "reset",
+	"expanded", "collapsed", "ellipsis", "enter", "gear", "context", "cross", "reset",
 }
 
 // Box is the set of characters of a box border.
@@ -37,7 +37,7 @@ type Icons struct {
 // column wide.
 type Glyphs struct {
 	BarFull, BarEmpty, Dot, Pointer, Left, Up, Right, Down, Middot, Dash, Expanded, Collapsed,
-	Ellipsis, Enter, Gear, Cross, Reset string
+	Ellipsis, Enter, Gear, Context, Cross, Reset string
 
 	Spinner []string
 	// Spark are the sparkline levels 0-7.
@@ -83,6 +83,8 @@ func (g *Glyphs) Slot(name string) *string {
 		return &g.Enter
 	case "gear":
 		return &g.Gear
+	case "context":
+		return &g.Context
 	case "cross":
 		return &g.Cross
 	case "reset":
@@ -104,7 +106,7 @@ var UnicodeGlyphs = Glyphs{
 	BarFull: "█", BarEmpty: "░", Dot: "●", Pointer: "›",
 	Left: "←", Up: "↑", Right: "→", Down: "↓", Middot: "·",
 	Dash: "—", Expanded: "▾", Collapsed: "▸", Ellipsis: "…",
-	Enter: "↵", Gear: "⚙", Cross: "✗", Reset: "↻",
+	Enter: "↵", Gear: "⚙", Context: "▤", Cross: "✗", Reset: "↻",
 	Spinner: []string{
 		"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇",
 		"⠏",
@@ -137,7 +139,7 @@ var UnicodeGlyphs = Glyphs{
 var ASCIIGlyphs = Glyphs{
 	BarFull: "#", BarEmpty: ".", Dot: "*", Pointer: ">", Left: "<", Up: "^", Right: ">",
 	Down: "v", Middot: "-", Dash: "-", Expanded: "v", Collapsed: ">", Ellipsis: "~",
-	Enter: "<", Gear: "&", Cross: "x", Reset: "@", ProviderSymbol: "*",
+	Enter: "<", Gear: "&", Context: "c", Cross: "x", Reset: "@", ProviderSymbol: "*",
 	Spinner: []string{"-", "\\", "|", "/"},
 	Spark:   []string{"_", ".", ":", "-", "=", "+", "*", "#"},
 	Icons: Icons{

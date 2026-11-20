@@ -206,20 +206,24 @@ func BadgesWidth(labels []string) int {
 	return sum + max(0, shown-1)
 }
 
-// TitleSpinnerColumns are the columns of the spinner slot at the right of a title bar: " ⠋ ─"
-// before the corner.
-const TitleSpinnerColumns = 4
-
-// TitleBar fits the title of a top border (`╭─ ✳ title ───── ⠋ ─╮`; the spinner slot only with
-// spinner). lead is how many columns go before the title after `╭─ ` (the provider symbol and
-// its space: 2; 0 for none). It returns the fitted title and how many line characters fill the
-// gap after it, so the whole line is exactly width columns.
-func TitleBar(title string, width int, spinner bool, lead int, ellipsis string) (fitted string, fill int) {
-	// corner + line + space | lead | title | space + fill (>= 1) | spinner slot | corner
-	fixed := 3 + lead + 2 + 1
-	if spinner {
-		fixed += TitleSpinnerColumns
+// TitleRightColumns are the columns a block of width columns takes at the right of a title bar:
+// the space before it and the space and line character after it (` ● busy 5s ─`). It is 0 for no
+// block at all.
+func TitleRightColumns(width int) int {
+	if width <= 0 {
+		return 0
 	}
+	return width + 3
+}
+
+// TitleBar fits the title of a top border (`╭─ ✳ title ───── ● busy 5s ─╮`). lead is how many
+// columns go before the title after `╭─ ` (the provider symbol and its space: 2; 0 for none) and
+// right the columns of the block at the right of the bar (the state of a session; 0 for none).
+// It returns the fitted title and how many line characters fill the gap after it, so the whole
+// line is exactly width columns.
+func TitleBar(title string, width, lead, right int, ellipsis string) (fitted string, fill int) {
+	// corner + line + space | lead | title | space + fill (>= 1) | right block | corner
+	fixed := 3 + lead + 2 + 1 + TitleRightColumns(right)
 	fitted = FitWidth(title, max(0, width-fixed), ellipsis)
 	fill = max(1, width-fixed+1-ansi.StringWidth(fitted))
 	return fitted, fill

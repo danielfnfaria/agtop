@@ -282,7 +282,8 @@ func TestPRsOverflowShowPlusN(t *testing.T) {
 		}
 	})
 	a := newApp(testOptions(newFakeStore(snapshot([]*store.SessionView{s}, profiles)), profiles), 100, 30)
-	mustContain(t, screen(a), "#1011  #1010  #1009  #1008  +8")
+	// The PRs share the line with the agent counts, so only the first two fit the box.
+	mustContain(t, screen(a), "#1011  #1010  +10")
 }
 
 func TestSpinnerTicksOnlyWhileVisible(t *testing.T) {
@@ -448,16 +449,17 @@ func TestActivityUnknownShowsRawStatus(t *testing.T) {
 		s.Activity, s.RawStatus = discovery.ActivityUnknown, "compacting"
 	})
 	a := newApp(testOptions(newFakeStore(snapshot([]*store.SessionView{s}, profiles)), profiles), 100, 30)
-	mustContain(t, screen(a), "● compacting · 5s ago")
+	// The state rides on the title bar of the box, with how long ago it was.
+	mustContain(t, screen(a), "● compacting 5s ─")
 }
 
-func TestPendingBackgroundSessionShowsNotStarted(t *testing.T) {
+func TestPendingBackgroundSessionShowsBackgroundMark(t *testing.T) {
 	s := session("claude:bg", func(s *store.SessionView) {
 		s.Kind = "background"
 	})
 	a := newApp(testOptions(newFakeStore(snapshot([]*store.SessionView{s}, profiles)), profiles), 100, 30)
 	f := screen(a)
-	mustContain(t, f, "● bg · not started")
+	mustContain(t, f, "● bg ─")
 	mustNotContain(t, f, "ended")
 }
 

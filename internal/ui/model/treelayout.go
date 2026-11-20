@@ -16,18 +16,18 @@ import (
 // left that joins the bus of every row to the bus that hangs from the parent, crossing no box.
 // Clusters sit side by side and wrap by the terminal width. The step is the largest one the tree
 // fits in both dimensions: the width of a cluster picks it (see PickStepPlan) and, when the whole
-// content is still taller than the body, every session drops a step together (see NewTreeLayout).
+// content is still taller than the body, every session drops a step together and then the
+// session boxes take steps of their own (see SessionStep and NewTreeLayout), so the height of a
+// session box belongs to its cluster and is never the same for every session of a run.
 //
 // Coordinates: x in columns and y in rows, from the corner of the body (the area above the
 // status bar). Inside a cluster, positions are relative to its corner.
 const (
-	// SessionWidth is the session box (with the border).
+	// SessionWidth is the session box of the largest step (with the border).
 	SessionWidth = 34
-	// SessionHeight is the session box with a single profile: the title bar, 5 content lines and
-	// the bottom border.
-	SessionHeight = 7
-	// SessionHeightMulti has one more line, the centered profile label under the title.
-	SessionHeightMulti = SessionHeight + 1
+	// SessionHeight is the session box of the largest step: the title bar, which carries the
+	// state, two content lines and the bottom border.
+	SessionHeight = 4
 	// AgentWidth is the agent box of the largest step (with the border).
 	AgentWidth = 26
 	// AgentHeight is 3 content lines and the border.
@@ -107,14 +107,52 @@ func (p StepPlan) At(depth int) AgentStep {
 // Size is the box of the given level.
 func (p StepPlan) Size(depth int) AgentSize { return p.At(depth).Size() }
 
-// SessionBoxHeight is the height of every session box in a run: it depends only on how many
-// profiles are watched (fixed while the viewer runs), never on the session, so the layout stays
-// a grid.
-func SessionBoxHeight(multiProfile bool) int {
-	if multiProfile {
-		return SessionHeightMulti
+// SessionStep is how much of a session box is drawn. Like the agent steps, they go from the
+// full box down to the smallest one; the tree takes the largest one it fits the body in (see
+// NewTreeLayout).
+type SessionStep int
+
+const (
+	// SessionFull is the full box: the profile, the model with its effort and the context
+	// percent on one line, the agent counts and the PRs on the next.
+	SessionFull SessionStep = iota
+	// SessionCompact is narrower and keeps a single line, the fields behind their glyph.
+	SessionCompact
+	// SessionTiny is the title bar and the bottom border, nothing else: what the session is
+	// doing is all that is left of it (with a line for the profile when more than one is
+	// watched).
+	SessionTiny
+)
+
+// SessionSize is the size of a session box, border included.
+type SessionSize struct {
+	Width, Height int
+}
+
+// sessionSizes is the size of each step, from the largest to the smallest. The profile is a
+// field of the content line, so it costs no height except on the smallest step, which has no
+// content line of its own (see SessionStep.Size).
+var sessionSizes = [...]SessionSize{
+	SessionFull:    {Width: SessionWidth, Height: SessionHeight},
+	SessionCompact: {Width: 28, Height: 3},
+	SessionTiny:    {Width: 22, Height: 2},
+}
+
+// SmallestSessionStep is the last step, the one that is used when no other fits.
+const SmallestSessionStep = SessionStep(len(sessionSizes) - 1)
+
+// Size is the box of the step (the full one for a step out of range). The smallest step takes a
+// line more when several profiles are watched: it is the only one with no content line to carry
+// the label of the profile, and which session belongs to which profile has to stay readable.
+func (s SessionStep) Size(multiProfile bool) SessionSize {
+	size := sessionSizes[SessionFull]
+	if s > SessionFull && s <= SmallestSessionStep {
+		size = sessionSizes[s]
 	}
-	return SessionHeight
+	if multiProfile && s == SessionTiny {
+		size.Height++
+	}
+	return size
 }
 
 // TreeAgent is an agent to lay out with the agents it launched, in the displayed order.
@@ -163,6 +201,11 @@ type ClusterLayout struct {
 	Width, Height int
 	// SessionLeft is the column (relative) of the session box.
 	SessionLeft int
+	// SessionStep is how much of the session box is drawn, and SessionBox its size (the step may
+	// differ from cluster to cluster, so neither the grid nor the viewport may assume one height
+	// for every session; see NewTreeLayout).
+	SessionStep SessionStep
+	SessionBox  SessionSize
 	// Anchor is the column (relative) of the center of the session box, where the stem leaves.
 	Anchor int
 	// Stem is the line under the session; nil without active agents.
@@ -185,9 +228,7 @@ type ClusterRow struct {
 // TreeLayout is the placement of every cluster.
 type TreeLayout struct {
 	Columns int
-	// SessionHeight is the height of the session boxes (see SessionBoxHeight).
-	SessionHeight int
-	Rows          []ClusterRow
+	Rows    []ClusterRow
 	// ContentHeight is the height of all rows of clusters, with the gaps between them.
 	ContentHeight int
 }
@@ -518,27 +559,28 @@ func (p *placer) placeRows(rows [][]sized, wrapped bool, anchor, minLeft, depth,
 	return y
 }
 
-// NewClusterLayout lays out the cluster of a session in at most maxWidth columns, with the agent
-// boxes of the given step. The first-level agents sit centered under the session, each agent
+// NewClusterLayout lays out the cluster of a session in at most maxWidth columns, with the
+// session box of the given step and size and the agent boxes of the given plan. The first-level agents sit centered under the session, each agent
 // centered over the ones it launched, and a bus joins every parent to its children
 // (`┌──┴──┐`). A block of children that does not fit the width wraps into rows joined by a
 // trunk at their left (`├`/`└`), with no link to the agents above. Without X and Y, which
 // TreeLayout fills.
-func NewClusterLayout(s TreeSession, maxWidth, boxHeight int, plan StepPlan, line style.Lines) ClusterLayout {
+func NewClusterLayout(s TreeSession, maxWidth int, box SessionSize, step SessionStep, plan StepPlan, line style.Lines) ClusterLayout {
 	rows, wrapped, rowsWidth := childRows(s.Agents, plan, 0, maxWidth)
 	trunk := trunkRoom(wrapped)
-	width := max(SessionWidth, trunk+rowsWidth)
-	anchor := boxAnchor(0, width, SessionWidth, trunk, rowsWidth)
+	width := max(box.Width, trunk+rowsWidth)
+	anchor := boxAnchor(0, width, box.Width, trunk, rowsWidth)
 	c := ClusterLayout{
-		Key: s.Key, Width: width, Height: boxHeight,
-		SessionLeft: anchor - SessionWidth/2, Anchor: anchor,
+		Key: s.Key, Width: width, Height: box.Height,
+		SessionLeft: anchor - box.Width/2, Anchor: anchor,
+		SessionStep: step, SessionBox: box,
 	}
 	if len(rows) == 0 {
 		return c
 	}
-	c.Stem = &Connector{Y: boxHeight, Left: anchor, Text: line.Vertical}
+	c.Stem = &Connector{Y: box.Height, Left: anchor, Text: line.Vertical}
 	p := placer{line: line, c: &c}
-	p.placeRows(rows, wrapped, anchor, trunk, 0, boxHeight+1)
+	p.placeRows(rows, wrapped, anchor, trunk, 0, box.Height+1)
 	for _, a := range c.Agents {
 		box := a.Size()
 		c.Width = max(c.Width, a.X+box.Width)
@@ -548,37 +590,113 @@ func NewClusterLayout(s TreeSession, maxWidth, boxHeight int, plan StepPlan, lin
 }
 
 // NewTreeLayout spreads the clusters in rows that fit in columns, in the given order, each row
-// centered. boxHeight is the height of the session boxes (see SessionBoxHeight). bodyRows is the
-// rows the body gives the tree (UnlimitedRows for no limit): each session first takes the step
-// its width allows (see PickStepPlan) and, when the content is taller than the body, every
-// session drops a step together until the whole thing fits, since the height belongs to the set
-// of clusters and not to any one of them. When not even the smallest boxes fit, the step is the
-// one that shows the most agent boxes whole in the body (see visibleAgents), the largest boxes
-// winning a tie, and the rest scrolls (see Viewport).
-func NewTreeLayout(sessions []TreeSession, columns, bodyRows, boxHeight int, line style.Lines) TreeLayout {
+// centered. multiProfile is passed on to the size of the session boxes (see SessionStep.Size). bodyRows is the rows the body gives the tree (UnlimitedRows for no limit):
+// each session first takes the agent step its width allows (see PickStepPlan) with the full
+// session box and, when the content is taller than the body, the boxes shrink in this order,
+// since the height belongs to the set of clusters and not to any one of them:
+//
+//  1. every session drops an agent step together, until the smallest one;
+//  2. then the session boxes drop a step at a time (see sessionSteps), the sessions with no
+//     active agents one step ahead of the others;
+//  3. once a candidate fits, the agent boxes grow back as far as the rows the session boxes
+//     gave back allow (see regrow).
+//
+// The first candidate that fits wins. When none of them does, the one that shows the most agent
+// boxes whole in the body (see visibleAgents), the largest boxes winning a tie, and the rest
+// scrolls (see Viewport).
+func NewTreeLayout(sessions []TreeSession, columns, bodyRows int, multiProfile bool, line style.Lines) TreeLayout {
 	cols := max(1, columns)
 	plans := make([]StepPlan, len(sessions))
 	for i, s := range sessions {
 		plans[i] = PickStepPlan(s, cols)
 	}
-	layout := placeClusters(sessions, plans, cols, boxHeight, line)
+	place := func(round int) TreeLayout {
+		return placeClusters(sessions, plans, cols, sessionSteps(sessions, round), multiProfile, line)
+	}
+	layout := place(0)
 	if bodyRows < 0 || layout.ContentHeight <= bodyRows {
 		return layout
 	}
-	// Not even the boxes of the width fit: the session boxes have a fixed height, so enough
-	// sessions overflow the body on their own. The step is then the one that reads the most
-	// agents, the largest boxes winning a tie, and the rest scrolls.
+	// The plans of the width are the ceiling of every level: nothing ever grows past them.
+	width := clonePlans(plans)
 	best, most := layout, visibleAgents(layout, bodyRows)
+	keep := func(candidate TreeLayout) {
+		if n := visibleAgents(candidate, bodyRows); n > most {
+			best, most = candidate, n
+		}
+	}
 	for demoteAll(plans) {
-		smaller := placeClusters(sessions, plans, cols, boxHeight, line)
+		smaller := place(0)
 		if smaller.ContentHeight <= bodyRows {
 			return smaller
 		}
-		if n := visibleAgents(smaller, bodyRows); n > most {
-			best, most = smaller, n
+		keep(smaller)
+	}
+	// The agents are as small as they go and the tree still overflows: the session boxes, the
+	// tallest thing on the screen, are what is left to give the rows back.
+	for round := 1; round <= int(SmallestSessionStep)+1; round++ {
+		smaller := place(round)
+		if smaller.ContentHeight <= bodyRows {
+			return regrow(smaller, plans, width, bodyRows, place, round)
 		}
+		keep(smaller)
 	}
 	return best
+}
+
+// regrow walks the agent boxes back up, as far as the plans of the width allow, while the layout
+// still fits the body: the session boxes that shrank may have given back more rows than the
+// agents had to lose, and the agents are what the tree is read for. The session boxes keep their
+// step: the round before this one did not fit even with the smallest agents, so nothing is owed
+// to them.
+func regrow(fitting TreeLayout, plans, width []StepPlan, bodyRows int, place func(int) TreeLayout, round int) TreeLayout {
+	for promoteAll(plans, width) {
+		larger := place(round)
+		if larger.ContentHeight > bodyRows {
+			return fitting
+		}
+		fitting = larger
+	}
+	return fitting
+}
+
+func clonePlans(plans []StepPlan) []StepPlan {
+	out := make([]StepPlan, len(plans))
+	for i, plan := range plans {
+		out[i] = slices.Clone(plan)
+	}
+	return out
+}
+
+// promoteAll takes every level of every plan one step up, never past the plan of the width; it
+// reports whether any of them moved. The monotony of a plan survives it: every level that is
+// not already at its own limit moves together.
+func promoteAll(plans, limit []StepPlan) bool {
+	moved := false
+	for i, plan := range plans {
+		for d, step := range plan {
+			if step > limit[i].At(d) {
+				plan[d], moved = step-1, true
+			}
+		}
+	}
+	return moved
+}
+
+// sessionSteps is the step of every session box at the given round of demotion: round 0 is the
+// full box for every session, and each round after it drops one step. A session with no active
+// agents has no tree hanging from it, so it is the one that loses the least by shrinking and the
+// one that gives the most rows back: it goes one step ahead of the others.
+func sessionSteps(sessions []TreeSession, round int) []SessionStep {
+	steps := make([]SessionStep, len(sessions))
+	for i, s := range sessions {
+		step := round - 1
+		if len(s.Agents) == 0 {
+			step = round
+		}
+		steps[i] = SessionStep(clamp(step, int(SessionFull), int(SmallestSessionStep)))
+	}
+	return steps
 }
 
 // visibleAgents is how many agent boxes of the layout stand whole, top and bottom border
@@ -615,12 +733,13 @@ func demoteAll(plans []StepPlan) bool {
 	return moved
 }
 
-// placeClusters lays every session out with its plan and spreads the clusters in rows of at most
-// cols columns, each row centered.
-func placeClusters(sessions []TreeSession, plans []StepPlan, cols, boxHeight int, line style.Lines) TreeLayout {
+// placeClusters lays every session out with its agent plan and its session step and spreads the
+// clusters in rows of at most cols columns, each row centered.
+func placeClusters(sessions []TreeSession, plans []StepPlan, cols int, steps []SessionStep, multiProfile bool, line style.Lines) TreeLayout {
 	clusters := make([]ClusterLayout, len(sessions))
 	for i, s := range sessions {
-		clusters[i] = NewClusterLayout(s, cols, boxHeight, plans[i], line)
+		step := steps[i]
+		clusters[i] = NewClusterLayout(s, cols, step.Size(multiProfile), step, plans[i], line)
 	}
 
 	var groups [][]ClusterLayout
@@ -643,7 +762,7 @@ func placeClusters(sessions []TreeSession, plans []StepPlan, cols, boxHeight int
 		groups = append(groups, current)
 	}
 
-	layout := TreeLayout{Columns: cols, SessionHeight: boxHeight}
+	layout := TreeLayout{Columns: cols}
 	y := 0
 	for _, group := range groups {
 		rowWidth, height := 0, 0
@@ -714,7 +833,7 @@ func (l TreeLayout) Viewport(bodyRows int, selectedKey string, prevTop int) Tree
 	maxTop := max(0, total-viewRows)
 	top := clamp(prevTop, 0, maxTop)
 	if sel, ok := l.Find(selectedKey); ok {
-		start, end := sel.Y, sel.Y+l.SessionHeight
+		start, end := sel.Y, sel.Y+sel.SessionBox.Height
 		if start < top {
 			top = start
 		} else if end > top+viewRows {

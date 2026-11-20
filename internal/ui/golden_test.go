@@ -4,8 +4,10 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
+	"github.com/danielfnfaria/agtop/internal/discovery"
 	"github.com/danielfnfaria/agtop/internal/store"
 	"github.com/danielfnfaria/agtop/internal/ui/style"
 )
@@ -59,6 +61,29 @@ func pendingStore() Options {
 		}),
 	}
 	return testOptions(newFakeStore(snapshot(sessions, profiles)), profiles)
+}
+
+// tinyStore is nine sessions of a single profile: enough to drive the session boxes down to the
+// smallest step (22x2, the title bar over the bottom border), with a long title, a wide-character
+// one and every state the bar has to show in that one row.
+func tinyStore() Options {
+	single := profiles[:1]
+	titles := []string{"Alpha task of a very long name", "\u6f22\u5b57\u306e\u30bf\u30b9\u30af long", "Gamma", "Delta", "Echo"}
+	var sessions []*store.SessionView
+	for i, title := range titles {
+		sessions = append(sessions, session("claude:t"+strconv.Itoa(i), func(s *store.SessionView) {
+			s.DisplayTitle = title
+		}))
+	}
+	sessions[0].Activity = discovery.ActivityBusy
+	sessions[1].Liveness, sessions[1].StaleSince = store.Stale, now-12_000
+	sessions[2].Kind = "background"
+	for i := 5; i < 9; i++ {
+		sessions = append(sessions, session("claude:t"+strconv.Itoa(i), func(s *store.SessionView) {
+			s.DisplayTitle = "Tiny " + strconv.Itoa(i)
+		}))
+	}
+	return testOptions(newFakeStore(snapshot(sessions, single)), single)
 }
 
 func nestedStore() Options {
@@ -117,6 +142,7 @@ func scenarios() []scenario {
 			return testOptions(newFakeStore(snap), profiles)
 		}, w: 80, h: 24},
 		{name: "scroll-80x24", opts: manyStore, w: 80, h: 24, keys: []string{"down", "down", "down"}},
+		{name: "tiny-sessions-80x20", opts: tinyStore, w: 80, h: 20},
 		{name: "agents-tree-100x30", opts: detailStore, w: 100, h: 30},
 		{name: "agents-tree-40x30", opts: detailStore, w: 40, h: 30},
 		{name: "pending-100x30", opts: pendingStore, w: 100, h: 30},

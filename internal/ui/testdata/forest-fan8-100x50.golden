@@ -9,12 +9,11 @@
 
 
 
-                                 ╭─ ✳ Simulated task ─────────────╮
-                                 │ Opus 4.7                       │
-                                 │ ctx ████░░░░░░  40%  80k/200k  │
-                                 │ agents  9 active · 9 total     │
-                                 │ no PRs                         │
-                                 │ ● idle · 5s ago                │
+
+
+                                 ╭─ ✳ Simulated task ─ ● idle 5s ─╮
+                                 │ Opus 4.7 · 40%                 │
+                                 │ 9/9 agents                     │
                                  ╰────────────────────────────────╯
                                                   │
                                                   └┐
@@ -35,6 +34,7 @@
         │ ⠋ ≡ reading      │  │ ⠋ ◌ starting     │  │ ⠋ ▸ running bash │  │ ⠋ ☁ web          │
         │ splits the work  │  │ writes the code  │  │ reviews the diff │  │ looks something… │
         ╰──────────────────╯  ╰──────────────────╯  ╰──────────────────╯  ╰──────────────────╯
+
 
 
 

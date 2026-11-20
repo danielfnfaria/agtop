@@ -27,12 +27,8 @@ type painter struct {
 }
 
 const (
-	// sessionContent is the columns inside a session box (border and padding off).
-	sessionContent = model.SessionWidth - 4
 	// durationReserve is the columns kept for the duration and the gap before it.
 	durationReserve = 7
-	// badgesShare is the least share of the model line the kind badge gets.
-	badgesShare = 0.4
 	// providerLead is the provider symbol and its space before a title.
 	providerLead = 2
 )
@@ -102,27 +98,6 @@ func modelLabel(s *store.SessionView, fallback string) string {
 	return fallback
 }
 
-// modelLineLayout splits the model line: the model on the left, the kind badge on the right with
-// at least badgesShare of the line.
-func modelLineLayout(modelText, kind string, width int, ellipsis string) (string, string) {
-	if kind == "" {
-		return model.FitWidth(modelText, width, ellipsis), ""
-	}
-	modelWidth := ansi.StringWidth(model.Clip(modelText, model.MaxText, model.DefaultEllipsis))
-	budget := max(int(float64(width)*badgesShare), width-1-modelWidth)
-	fitted := model.FitBadges([]string{kind}, budget)
-	used := model.BadgesWidth(fitted)
-	room := width
-	if used > 0 {
-		room = width - used - 1
-	}
-	shown := ""
-	if len(fitted) > 0 {
-		shown = fitted[0]
-	}
-	return model.FitWidth(modelText, max(0, room), ellipsis), shown
-}
-
 func kindBadge(s *store.SessionView) string {
 	if s.Kind == "" || s.Kind == "interactive" {
 		return ""
@@ -139,128 +114,266 @@ func (p painter) border(c *canvas, x, y, w, h int, b style.Box, st sty) {
 	c.text(x, y+h-1, seg{b.BottomLeft + strings.Repeat(b.Bottom, max(0, w-2)) + b.BottomRight, st})
 }
 
-// sessionBox draws the box of a session at (x, y): the title bar, the profile line (2+
-// profiles), model, context, agents, PRs and activity, then the bottom border.
-func (p painter) sessionBox(c *canvas, x, y int, s *store.SessionView, selected, showProfile bool, tone style.Color) {
+// sessionBox draws the box of a session at (x, y) with as much of it as its step holds (see
+// model.SessionStep). The title bar carries the state of the session at its right, and under it
+// come the content lines of the step: the profile, the model and the context on one line and the
+// agent counts with the PRs on the next (the full box), the same fields behind their glyph on a
+// single line (the compact one) or nothing at all (the smallest one).
+func (p painter) sessionBox(c *canvas, x, y int, s *store.SessionView, step model.SessionStep, size model.SessionSize, selected, showProfile bool, tone style.Color) {
 	g, t := p.g, p.t
-	isStale := stale(s)
-	isPending := pending(s)
+	b := sessionPaint{painter: p, c: c, s: s, cx: x + 2, inner: size.Width - 4,
+		isStale: stale(s), isPending: pending(s)}
+	if b.isStale {
+		b.tonef = t.Muted
+	}
 	color := style.SessionBorderColor(style.Activity(s.Activity), string(s.Liveness), t)
-	if isPending {
+	if b.isPending {
 		color = t.Pending
 	}
 	edge, box := g.TopRound, g.BorderRound
 	if selected {
 		edge, box = g.TopBold, g.BorderBold
 	}
-	edgeSt := sty{fg: color, dim: isStale}
-	isBusy := busy(s)
-	title, fill := model.TitleBar(s.DisplayTitle, model.SessionWidth, isBusy, providerLead, g.Ellipsis)
+	edgeSt := sty{fg: color, dim: b.isStale}
+
+	// The state of the session rides on the title bar: on the smallest step it is the only thing
+	// left of it, so it is never dropped, only shortened.
+	state := b.state(step != model.SessionTiny, step == model.SessionFull)
+	title, fill := model.TitleBar(s.DisplayTitle, size.Width, providerLead, segsWidth(state), g.Ellipsis)
 	provider := domain.ProviderInfo(s.Provider)
 	titleSt := sty{bold: true, inverse: selected}
-	if selected || isStale {
+	if selected || b.isStale {
 		titleSt.fg = color
 	}
 	bar := []seg{
 		{edge.Left + edge.Line + " ", edgeSt},
-		{g.ProviderMark(provider.Symbol), sty{fg: provider.Color, dim: isStale}},
+		{g.ProviderMark(provider.Symbol), sty{fg: provider.Color, dim: b.isStale}},
 		plain(" "),
 		{title, titleSt},
 		{" " + strings.Repeat(edge.Line, fill), edgeSt},
+		plain(" "),
 	}
-	if isBusy {
-		bar = append(bar, plain(" "), fg(p.spinner(), t.Busy), fg(" "+edge.Line, color))
-	}
-	bar = append(bar, seg{edge.Right, edgeSt})
-	c.line(x, y, model.SessionWidth, g.Ellipsis, bar...)
+	bar = append(bar, state...)
+	bar = append(bar, fg(" "+edge.Line, color), seg{edge.Right, edgeSt})
+	c.line(x, y, size.Width, g.Ellipsis, bar...)
+	p.border(c, x, y, size.Width, size.Height, box, edgeSt)
 
-	h := model.SessionBoxHeight(showProfile)
-	p.border(c, x, y, model.SessionWidth, h, box, edgeSt)
-
-	cx, row := x+2, y+1
-	var tonef style.Color
-	if isStale {
-		tonef = t.Muted
-	}
-	if showProfile {
-		text := model.FitWidth(s.ProfileLabel, sessionContent, g.Ellipsis)
-		pad := (sessionContent - ansi.StringWidth(text)) / 2
-		col := tone
-		if col == "" && len(t.Profiles) > 0 {
-			col = t.Profiles[0]
+	row := y + 1
+	switch step {
+	case model.SessionTiny:
+		// No content line of its own: the one case that keeps it is the profile label, which
+		// nothing else on the box would tell (see model.SessionStep.Size).
+		if showProfile {
+			b.fieldLine(row, tone, true)
 		}
-		if isStale {
-			col = t.Muted
-		}
-		c.line(cx+pad, row, sessionContent-pad, g.Ellipsis, fg(text, col))
-		row++
-	}
-
-	name := modelLabel(s, "unknown model")
-	modelText := name
-	if s.Effort != "" {
-		modelText = name + " " + g.Middot + " " + s.Effort
-	}
-	m, kind := modelLineLayout(modelText, kindBadge(s), sessionContent, g.Ellipsis)
-	kindW := 0
-	if kind != "" {
-		kindW = ansi.StringWidth(kind)
-		c.line(cx+sessionContent-kindW, row, kindW, g.Ellipsis, fg(kind, t.Muted))
-		kindW++
-	}
-	c.line(cx, row, sessionContent-kindW, g.Ellipsis, fg(m, tonef))
-	row++
-
-	ctx := model.NewContextLabel(s.ContextUsed, s.ContextPercent, s.ContextWindow, 10, g, t)
-	barColor := ctx.Color
-	if isStale {
-		barColor = t.Muted
-	}
-	c.line(cx, row, sessionContent, g.Ellipsis,
-		fg("ctx ", tonef), fg(ctx.Bar, barColor),
-		fg(" "+padStart(ctx.Pct, 4)+"  "+ctx.Numbers, tonef))
-	row++
-
-	active, total := agentCounts(s.Agents)
-	agentsColor := tonef
-	if agentsColor == "" {
-		agentsColor = t.Muted
-		if active > 0 {
-			agentsColor = t.Busy
-		}
-	}
-	agents := "none"
-	if total > 0 {
-		agents = strconv.Itoa(active) + " active " + g.Middot + " " + strconv.Itoa(total) + " total"
-	}
-	c.line(cx, row, sessionContent, g.Ellipsis, fg("agents  "+agents, agentsColor))
-	row++
-
-	c.line(cx, row, sessionContent, g.Ellipsis, p.prLine(s.PRs, isStale)...)
-	row++
-
-	switch {
-	case isStale:
-		c.line(cx, row, sessionContent, g.Ellipsis,
-			fg(g.Dot+" "+p.ago(s.StaleSince, "ended ", " ago", "ended"), t.Muted))
-	case isPending:
-		c.line(cx, row, sessionContent, g.Ellipsis,
-			fg(g.Dot, t.Pending), plain(" bg "+g.Middot+" not started"))
+	case model.SessionCompact:
+		b.fieldLine(row, tone, showProfile)
 	default:
-		c.line(cx, row, sessionContent, g.Ellipsis,
-			fg(g.Dot, style.ActivityColor(style.Activity(s.Activity), t)),
-			plain(" "+style.ActivityText(style.Activity(s.Activity), s.RawStatus)+" "+g.Middot+" "+
-				p.ago(s.LastActivityAt, "", " ago", "no activity")))
+		b.modelLine(row, tone, showProfile)
+		b.agentsLine(row + 1)
 	}
 }
 
-// prLine is the PR numbers, newest first, as many as fit (+N for the rest), or "no PRs".
-func (p painter) prLine(prs []domain.PullRequestRef, muted bool) []seg {
-	t := p.t
-	if len(prs) == 0 {
-		return []seg{{"no PRs", sty{fg: t.Muted, dim: true}}}
+// sessionPaint is one session box being drawn: what every line of it shares.
+type sessionPaint struct {
+	painter
+	c *canvas
+	s *store.SessionView
+	// cx is the first content column and inner the content width (border and padding off).
+	cx, inner int
+	isStale   bool
+	isPending bool
+	// tonef mutes the text of a session that ended ("" while it lives).
+	tonef style.Color
+}
+
+// state is what the session is doing, for the right of the title bar: the mark (the spinner
+// while it is busy, a dot otherwise), with text what it is doing and with withTime since when.
+func (b sessionPaint) state(withText, withTime bool) []seg {
+	g, t := b.g, b.t
+	mark, text := fg(g.Dot, t.Muted), "ended"
+	switch {
+	case b.isStale:
+		if withTime {
+			text = b.ago(b.s.StaleSince, "ended ", "", "ended")
+		}
+	case b.isPending:
+		mark, text = fg(g.Dot, t.Pending), "bg"
+	default:
+		activity := style.Activity(b.s.Activity)
+		mark, text = fg(g.Dot, style.ActivityColor(activity, t)), style.ActivityText(activity, b.s.RawStatus)
+		if activity == style.ActivityBusy {
+			mark = fg(b.spinner(), t.Busy)
+		}
+		if withTime {
+			if since := b.ago(b.s.LastActivityAt, "", "", ""); since != "" {
+				text += " " + since
+			}
+		}
 	}
-	shown, more := model.PRLayout(prs, sessionContent)
+	if !withText {
+		return []seg{mark}
+	}
+	return []seg{mark, plain(" " + text)}
+}
+
+// profileColor is the color of the label of the profile of the session.
+func (b sessionPaint) profileColor(tone style.Color) style.Color {
+	switch {
+	case b.isStale:
+		return b.t.Muted
+	case tone != "":
+		return tone
+	case len(b.t.Profiles) > 0:
+		return b.t.Profiles[0]
+	}
+	return ""
+}
+
+// profileField is the label of the profile, in the color of that profile.
+func (b sessionPaint) profileField(tone style.Color) []seg {
+	return []seg{fg(b.s.ProfileLabel, b.profileColor(tone))}
+}
+
+func (b sessionPaint) ctxLabel() model.ContextLabel {
+	return model.NewContextLabel(b.s.ContextUsed, b.s.ContextPercent, b.s.ContextWindow, 10, b.g, b.t)
+}
+
+// ctxField is the share of the context window the session has used.
+func (b sessionPaint) ctxField(glyph bool) []seg {
+	ctx := b.ctxLabel()
+	color := ctx.Color
+	if b.isStale {
+		color = b.t.Muted
+	}
+	if glyph {
+		return []seg{fg(b.g.Context+" "+ctx.Pct, color)}
+	}
+	return []seg{fg(ctx.Pct, color)}
+}
+
+// agentsField is the active agents over the total, as a count (`1/20 agents`) or behind the gear
+// (`⚙ 1/20`); it is empty with the glyph when the session never launched one.
+func (b sessionPaint) agentsField(glyph bool) []seg {
+	active, total := agentCounts(b.s.Agents)
+	color := b.tonef
+	if color == "" {
+		color = b.t.Muted
+		if active > 0 {
+			color = b.t.Busy
+		}
+	}
+	counts := strconv.Itoa(active) + "/" + strconv.Itoa(total)
+	if glyph {
+		if total == 0 {
+			return nil
+		}
+		return []seg{fg(b.g.Gear+" "+counts, color)}
+	}
+	if total == 0 {
+		return []seg{fg("no agents", color)}
+	}
+	return []seg{fg(counts+" agents", color)}
+}
+
+// prField is the PR numbers of the session, as many as fit in width columns; it is empty without
+// a PR or without the room for one.
+func (b sessionPaint) prField(width int) []seg {
+	if len(b.s.PRs) == 0 || width <= 0 {
+		return nil
+	}
+	return b.prSegs(b.s.PRs, width, b.isStale)
+}
+
+// modelLine is the first content line of the full box: the profile, the model with its effort
+// and the context percent, with the kind badge of a session that is not interactive at its right.
+// The model is the one field that gives way, so the percent never falls off the line.
+func (b sessionPaint) modelLine(row int, tone style.Color, showProfile bool) {
+	g, t := b.g, b.t
+	room := b.inner
+	if badges := model.FitBadges([]string{kindBadge(b.s)}, b.inner/2); len(badges) > 0 {
+		w := model.BadgesWidth(badges)
+		b.c.line(b.cx+b.inner-w, row, w, g.Ellipsis, fg(badges[0], t.Muted))
+		room = max(0, b.inner-w-1)
+	}
+	var head, tail [][]seg
+	if showProfile {
+		head = append(head, b.profileField(tone))
+	}
+	if b.s.Effort != "" {
+		tail = append(tail, []seg{fg(b.s.Effort, b.tonef)})
+	}
+	tail = append(tail, b.ctxField(false))
+	used := 0
+	for _, f := range head {
+		used += segsWidth(f) + fieldGap
+	}
+	for _, f := range tail {
+		used += segsWidth(f) + fieldGap
+	}
+	name := model.FitWidth(modelLabel(b.s, "unknown model"), max(0, room-used), g.Ellipsis)
+	fields := append(head, []seg{fg(name, b.tonef)})
+	fields = append(fields, tail...)
+	b.c.line(b.cx, row, room, g.Ellipsis, b.joinFields(fields)...)
+}
+
+// agentsLine is the second content line of the full box: the agent counts and the PRs.
+func (b sessionPaint) agentsLine(row int) {
+	fields := [][]seg{b.agentsField(false)}
+	fields = append(fields, b.prField(b.inner-segsWidth(fields[0])-fieldGap))
+	b.c.line(b.cx, row, b.inner, b.g.Ellipsis, b.joinFields(fields)...)
+}
+
+// fieldLine is the single content line of the smaller steps: the same fields as the full box,
+// each behind its glyph, so what is a word on the full box costs one column here.
+func (b sessionPaint) fieldLine(row int, tone style.Color, showProfile bool) {
+	var fields [][]seg
+	if showProfile {
+		fields = append(fields, b.profileField(tone))
+	}
+	fields = append(fields, b.agentsField(true), b.ctxField(true))
+	used := 0
+	for _, f := range fields {
+		if len(f) > 0 {
+			used += segsWidth(f) + fieldGap
+		}
+	}
+	fields = append(fields, b.prField(b.inner-used))
+	b.c.line(b.cx, row, b.inner, b.g.Ellipsis, b.joinFields(fields)...)
+}
+
+// fieldGap is the columns the middot between two fields takes.
+const fieldGap = 3
+
+// joinFields puts a middot between the fields of a content line, the empty ones left out.
+func (b sessionPaint) joinFields(fields [][]seg) []seg {
+	var out []seg
+	for _, f := range fields {
+		if len(f) == 0 {
+			continue
+		}
+		if len(out) > 0 {
+			out = append(out, fg(" "+b.g.Middot+" ", b.t.Muted))
+		}
+		out = append(out, f...)
+	}
+	return out
+}
+
+// segsWidth is the columns a run of segments takes.
+func segsWidth(segs []seg) int {
+	w := 0
+	for _, s := range segs {
+		w += ansi.StringWidth(s.text)
+	}
+	return w
+}
+
+// prSegs is the PR numbers of a session, newest first, as many as fit in width columns (+N for
+// the rest).
+func (p painter) prSegs(prs []domain.PullRequestRef, width int, muted bool) []seg {
+	t := p.t
+	shown, more := model.PRLayout(prs, width)
 	color := t.Link
 	if muted {
 		color = t.Muted
@@ -353,11 +466,12 @@ func (p painter) agentBox(c *canvas, x, y, depth int, step model.AgentStep, a *s
 
 	if step == model.StepTiny {
 		// The smallest box has room for a single line, so the kind goes in the top border. It is
-		// cut for real, never by the terminal: the corner comes after it.
+		// cut for real, never by the terminal: the corner comes after it. What the kind leaves of
+		// the border is line, as on the title bar of a session, so the box never looks open.
 		kind := model.FitWidth(a.Type, inner, g.Ellipsis)
-		pad := strings.Repeat(" ", max(0, inner-ansi.StringWidth(kind)))
+		fill := strings.Repeat(b.Top, max(0, inner-ansi.StringWidth(kind)))
 		c.line(x, y, box.Width, g.Ellipsis,
-			seg{b.TopLeft + " ", st}, seg{kind, sty{bold: true}}, seg{pad + " " + b.TopRight, st})
+			seg{b.TopLeft + " ", st}, seg{kind, sty{bold: true}}, seg{" " + fill + b.TopRight, st})
 		p.border(c, x, y, box.Width, box.Height, b, st)
 		mark := fg(g.Dot, color)
 		if domain.IsActive(a.Status) && a.Activity != nil {
@@ -392,11 +506,4 @@ func (p painter) agentBox(c *canvas, x, y, depth int, step model.AgentStep, a *s
 		desc = fitOwn(model.Clip(a.Description, model.MaxText, g.Ellipsis), inner, g.Ellipsis)
 	}
 	c.line(cx, y+3, inner, g.Ellipsis, fg(desc, t.Muted))
-}
-
-func padStart(s string, n int) string {
-	if w := ansi.StringWidth(s); w < n {
-		return strings.Repeat(" ", n-w) + s
-	}
-	return s
 }

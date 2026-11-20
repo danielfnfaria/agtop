@@ -40,7 +40,7 @@ white, gray and the *Bright forms, e.g. cyanBright) or #rgb / #rrggbb:
   preset = "ascii"                 unicode | ascii (+-| borders, # . bars)
   dot = "*"                        per slot: barFull barEmpty dot pointer left
   spinner = ["-", "\\", "|", "/"]  up right down middot dash expanded collapsed
-                                   ellipsis enter gear cross reset, spinner
+                                   ellipsis enter gear context cross reset, spinner
   [layout]
   top_bar = true                   false: never show the usage/activity bar
   time = "relative"                relative ("5m ago") | absolute ("14:03:21")
