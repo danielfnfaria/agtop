@@ -53,7 +53,5 @@ homebrew_casks:
     # The binaries are not signed: drop the quarantine attribute so macOS runs them.
     hooks:
       post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/agtop"]
-          end
+        install_steps: |
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/agtop"]
