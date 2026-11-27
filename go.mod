@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	charm.land/bubbletea/v2 v2.0.10
-	github.com/charmbracelet/x/ansi v0.11.9
+	github.com/charmbracelet/x/ansi v0.11.10
 	github.com/charmbracelet/x/term v0.2.2
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/pelletier/go-toml/v2 v2.2.4
